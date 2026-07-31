@@ -107,20 +107,6 @@ Nudge 的“强交互感”来自清晰的状态变化，而不是装饰性特�
   </tr>
 </table>
 
-## 「赭墨纸感 UI」
-
-Nudge 的设计体系命名为 **赭墨纸感 UI（Ochre Ink Paper UI）**，视觉参考 [invite.ioll.pp.ua](https://invite.ioll.pp.ua/)：
-
-- 背景 `#f5f4ed`
-- 表面 `#faf9f5`
-- 主文字 `#141413`
-- 次级文字 `#5e5d59`
-- 赭橙强调色 `#c96442`
-- 品牌、标题和任务内容使用霞鹜文楷；日期、表单和快捷键信息使用 Segoe UI Variable
-- 12–16px 圆角、克制阴影和紧凑信息层级
-
-完整原则见 [`DESIGN.md`](./DESIGN.md)，产品定位与边界见 [`PRODUCT.md`](./PRODUCT.md)。
-
 ## 快捷键
 
 | 快捷键 | 作用 |
