@@ -1,0 +1,14 @@
+[
+  {
+    "date": "2026-07-30",
+    "time": "23:25",
+    "hours": 1.5,
+    "note": "写了 rmsnorm kernel"
+  },
+  {
+    "date": "2026-07-30",
+    "time": "23:25",
+    "hours": 0.5,
+    "note": "读 paged attention 论文"
+  }
+]
