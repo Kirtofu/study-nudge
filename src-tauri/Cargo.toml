@@ -1,6 +1,6 @@
 [package]
 name = "nudge"
-version = "2.0.0-beta.1"
+version = "2.0.0"
 description = "A warm, offline-first todo, focus, and learning planner"
 authors = ["Nudge contributors"]
 license = "MIT"

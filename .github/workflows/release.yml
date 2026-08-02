@@ -8,9 +8,9 @@ on:
       tag:
         description: Existing or new release tag
         required: true
-        default: v2.0.0-beta.1
+        default: v2.0.0
       publish:
-        description: Publish or update the GitHub prerelease after all builds pass
+        description: Publish or update the GitHub release after all builds pass
         required: true
         type: boolean
         default: false

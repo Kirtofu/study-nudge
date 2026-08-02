@@ -10,4 +10,4 @@ Nudge 2.0.0 是跨平台正式版，提供待办、专注计时、任务学习�
 - 可选 AI 推荐与 WebDAV/Nextcloud 端到端加密同步。
 - 桌面托盘、通知、快捷键和专注计时恢复。
 
-正式版发布包包含各平台签名状态和 `SHA256SUMS.txt`，详见 GitHub Release 页面。
+发布包和 `SHA256SUMS.txt` 会上传到 GitHub Release。Windows/macOS 签名、Android release keystore 和 iOS 真机签名需要在对应平台接入证书后启用。

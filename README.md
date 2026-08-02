@@ -6,21 +6,21 @@ Nudge 是一个本地优先的待办、专注和学习规划应用。它支持 W
 
 ## 当前版本
 
-`v2.0.0-beta.1` 是跨平台测试版。桌面包尚未签名，Android 为调试 APK，iOS 仅提供 Apple Silicon 模拟器包。正式使用前请备份数据，并从 [GitHub Releases](https://github.com/Kirtofu/study-nudge/releases) 下载文件。
+`v2.0.0` 是正式版本。桌面包目前未接入平台签名，Android 提供测试 APK，iOS 提供 Apple Silicon 模拟器包。正式使用前请备份数据，并从 [GitHub Releases](https://github.com/Kirtofu/study-nudge/releases) 下载文件。
 
 ## 下载
 
 | 平台 | 架构 | 文件 |
 | --- | --- | --- |
-| Windows 10/11 | x64 | [安装版](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-windows-x64-setup.exe) · [便携版](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-windows-x64-portable.zip) |
-| Ubuntu 22.04+ | x64 | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-linux-x64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-linux-x64.deb) |
-| Ubuntu 22.04+ | ARM64 | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-linux-arm64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-linux-arm64.deb) |
-| macOS 12+ | Intel | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-macos-x64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-macos-x64.app.zip) |
-| macOS 12+ | Apple Silicon | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-macos-arm64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-macos-arm64.app.zip) |
-| Android 10+ | ARM64 | [调试 APK](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-android-arm64-debug.apk) |
-| iOS 16+ | Apple Silicon Simulator | [模拟器 app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/Nudge-2.0.0-beta.1-ios-simulator-arm64.app.zip) |
+| Windows 10/11 | x64 | [安装版](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-windows-x64-setup.exe) · [便携版](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-windows-x64-portable.zip) |
+| Ubuntu 22.04+ | x64 | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-linux-x64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-linux-x64.deb) |
+| Ubuntu 22.04+ | ARM64 | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-linux-arm64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-linux-arm64.deb) |
+| macOS 12+ | Intel | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-macos-x64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-macos-x64.app.zip) |
+| macOS 12+ | Apple Silicon | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-macos-arm64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-macos-arm64.app.zip) |
+| Android 10+ | ARM64 | [测试 APK](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-android-arm64-debug.apk) |
+| iOS 16+ | Apple Silicon Simulator | [模拟器 app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-ios-simulator-arm64.app.zip) |
 
-[SHA-256 校验文件](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0-beta.1/SHA256SUMS.txt)
+[SHA-256 校验文件](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/SHA256SUMS.txt)
 
 ## 功能
 
@@ -58,10 +58,10 @@ Nudge 是一个本地优先的待办、专注和学习规划应用。它支持 W
 
 Windows 首次启动会检测旧版 `%APPDATA%\\Nudge\\nudge.db`，复制后在副本上迁移，不修改旧数据库和备份。旧任务会保留，学习包初始化为空。旧 `data.json` 按内容哈希幂等导入；仓库中的 `study-nudge.ps1` 和 `data.json` 保持不变。
 
-## Beta 限制
+## 发布状态
 
-- 尚未提供 Windows Authenticode、macOS Developer ID、Android release keystore 或 iOS 真机签名。
-- iOS 当前为模拟器包，不能直接安装到真机。
+- Windows 和 macOS 安装包尚未接入 Authenticode/Developer ID 签名。
+- Android 当前为测试 APK，iOS 当前为模拟器包，不能直接安装到真机。
 - 不包含账号、云端后端、实时协作、重复任务、看板、月历和自动更新。
 
 ## 本地开发
@@ -96,7 +96,7 @@ npm run ios:build
 
 ## 正式版发布条件
 
-正式版不是只改一个版本号。需要先完成 beta 验证、数据迁移和崩溃检查，再为各平台生成可验证的签名包：Windows Authenticode、macOS Developer ID 和 notarization、Android release keystore、iOS 真机/TestFlight 签名。随后将所有清单和包版本改为 `2.0.0`，移除 Release 工作流的 `--prerelease`，创建 `v2.0.0` tag，上传签名包与 `SHA256SUMS.txt`，并在 GitHub 将 Release 标为正式版。
+正式版发布流程已配置为：将版本统一设为 `2.0.0`，创建 `v2.0.0` tag，CI 构建所有包，上传包和 `SHA256SUMS.txt`，并创建非 prerelease 的 GitHub Release。平台签名仍需接入各平台证书后再重新发布。
 
 ## 项目结构
 
