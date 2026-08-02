@@ -2353,6 +2353,7 @@ select {
 
 .learning-pack-title {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   align-items: center;
   gap: var(--space-3);
@@ -2401,8 +2402,15 @@ select {
 .settings-inline-actions,
 .node-inspector-actions {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: var(--space-2);
+}
+
+.learning-pack-header-actions {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .learning-pack-status,
@@ -2565,9 +2573,14 @@ select {
 
 .learning-column-heading {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   align-items: center;
   gap: var(--space-2);
+}
+
+.learning-column-heading > div {
+  min-width: 0;
 }
 
 .learning-column-icon {
@@ -2576,8 +2589,11 @@ select {
 }
 
 .learning-column-heading h3 {
+  overflow: hidden;
   font-size: 0.875rem;
   line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .learning-column-heading p {
@@ -2591,7 +2607,11 @@ select {
 }
 
 .learning-column-tools {
-  flex: 0 0 auto;
+  display: flex;
+  flex: 0 1 auto;
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .learning-column-tools > span {
@@ -2603,6 +2623,21 @@ select {
 .segmented-icon {
   min-width: 1.8rem;
   min-height: 1.8rem;
+}
+
+.roadmap-header {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.roadmap-header .learning-column-heading {
+  flex: 1 1 10rem;
+  min-width: 10rem;
+}
+
+.roadmap-header .learning-column-tools {
+  flex: 0 1 12rem;
+  min-width: 8rem;
 }
 
 .segmented-icon {
@@ -2710,6 +2745,7 @@ select {
 
 .resource-copy {
   min-width: 0;
+  padding-right: 4.5rem;
 }
 
 .resource-title-line {
