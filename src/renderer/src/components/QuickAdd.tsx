@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { addDays, format } from 'date-fns'
-import { ArrowUp, CalendarPlus, Inbox, Plus, Sparkles } from 'lucide-react'
+import { ArrowUp, CalendarPlus, Inbox, Plus, Route, Sparkles } from 'lucide-react'
 import type { Priority } from '@shared/types'
 import { api } from '../bridge'
 import { useNudgeStore } from '../store'
@@ -25,9 +25,11 @@ export function QuickAdd(): React.JSX.Element {
   const currentView = useNudgeStore((state) => state.currentView)
   const createTask = useNudgeStore((state) => state.createTask)
   const closeDrawer = useNudgeStore((state) => state.closeDrawer)
+  const openLearning = useNudgeStore((state) => state.openLearning)
   const [value, setValue] = useState('')
   const [expanded, setExpanded] = useState(false)
   const [schedule, setSchedule] = useState<'view' | 'today' | 'tomorrow' | 'inbox'>('view')
+  const [submitting, setSubmitting] = useState<'add' | 'plan' | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const showToast = useToast()
 
@@ -59,28 +61,35 @@ export function QuickAdd(): React.JSX.Element {
     return { listId: 'inbox', scheduledFor: null }
   }, [currentView])
 
-  const submit = async (): Promise<void> => {
+  const submit = async (withPlanning = false): Promise<void> => {
     const parsed = parseQuickTask(value)
     if (!parsed.title) return
     let scheduledFor = viewDefaults.scheduledFor
     if (schedule === 'today') scheduledFor = dateKey()
     if (schedule === 'tomorrow') scheduledFor = format(addDays(new Date(), 1), 'yyyy-MM-dd')
     if (schedule === 'inbox') scheduledFor = null
+    setSubmitting(withPlanning ? 'plan' : 'add')
     try {
-      await createTask({
+      const task = await createTask({
         title: parsed.title,
         listId: viewDefaults.listId,
         scheduledFor,
         priority: parsed.priority,
         tagNames: parsed.tagNames
       })
-      closeDrawer()
+      if (withPlanning) await openLearning(task.id)
+      else closeDrawer()
       setValue('')
       setExpanded(false)
       setSchedule('view')
-      showToast({ message: '任务已经记下来了', detail: parsed.title })
+      showToast({
+        message: withPlanning ? '任务已添加，学习包已经展开' : '任务已经记下来了',
+        detail: parsed.title
+      })
     } catch (error) {
       showToast({ message: '任务没有添加成功', detail: error instanceof Error ? error.message : '请稍后重试' })
+    } finally {
+      setSubmitting(null)
     }
   }
 
@@ -89,7 +98,7 @@ export function QuickAdd(): React.JSX.Element {
       className={`quick-add ${expanded ? 'is-expanded' : ''}`}
       onSubmit={(event) => {
         event.preventDefault()
-        void submit()
+        void submit(false)
       }}
     >
       <span className="quick-add-leading" aria-hidden="true">
@@ -133,9 +142,25 @@ export function QuickAdd(): React.JSX.Element {
           <span className="quick-add-hint">支持 #标签 与 !高 / !中 / !低</span>
         </div>
       ) : null}
-      <button type="submit" className="quick-add-submit" disabled={!parseQuickTask(value).title} aria-label="添加任务">
-        <ArrowUp size={16} aria-hidden="true" />
-      </button>
+      <div className="quick-add-actions">
+        <button
+          type="submit"
+          className="quick-add-action quick-add-action-secondary"
+          disabled={!parseQuickTask(value).title || submitting !== null}
+        >
+          <ArrowUp size={15} aria-hidden="true" />
+          <span>{submitting === 'add' ? '添加中…' : '添加任务'}</span>
+        </button>
+        <button
+          type="button"
+          className="quick-add-action quick-add-action-primary"
+          disabled={!parseQuickTask(value).title || submitting !== null}
+          onClick={() => void submit(true)}
+        >
+          <Route size={15} aria-hidden="true" />
+          <span>{submitting === 'plan' ? '规划中…' : '规划并添加'}</span>
+        </button>
+      </div>
     </form>
   )
 }

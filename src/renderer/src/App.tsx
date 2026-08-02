@@ -1,4 +1,5 @@
 import { useEffect, useMemo } from 'react'
+import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { AnimatePresence, motion } from 'motion/react'
 import { AlertTriangle, RotateCcw, Search, TimerReset, X } from 'lucide-react'
 import { CommandPalette } from './components/CommandPalette'
@@ -8,6 +9,8 @@ import { QuickAdd } from './components/QuickAdd'
 import { SettingsDrawer } from './components/SettingsDrawer'
 import { Sidebar } from './components/Sidebar'
 import { TaskList } from './components/TaskList'
+import { LearningPackWorkspace } from './components/LearningPackWorkspace'
+import { MobileNav } from './components/MobileNav'
 import { TitleBar } from './components/TitleBar'
 import { ToastProvider } from './components/Toast'
 import { useNudgeStore } from './store'
@@ -47,6 +50,7 @@ function MainApp(): React.JSX.Element {
   const setSearch = useNudgeStore((state) => state.setSearch)
   const drawerMode = useNudgeStore((state) => state.drawerMode)
   const setCommandOpen = useNudgeStore((state) => state.setCommandOpen)
+  const openLearningTaskId = useNudgeStore((state) => state.openLearningTaskId)
 
   useEffect(() => {
     void initialize()
@@ -71,7 +75,11 @@ function MainApp(): React.JSX.Element {
     return lists.find((list) => list.id === currentView.slice(5))?.name ?? '清单'
   }, [currentView, lists])
 
-  const visibleCount = filterTasks(tasks, currentView, search).length
+  const visibleTasks = useMemo(() => filterTasks(tasks, currentView, search), [currentView, search, tasks])
+  const visibleCount = visibleTasks.length
+  const learningNeedsQuickAnchor = Boolean(
+    openLearningTaskId && !visibleTasks.some((task) => task.id === openLearningTaskId)
+  )
 
   if (!initialized) {
     return error ? <ErrorScreen message={error} onRetry={() => void initialize()} /> : <LoadingScreen />
@@ -108,6 +116,11 @@ function MainApp(): React.JSX.Element {
           </div>
         </div>
         <QuickAdd />
+        {learningNeedsQuickAnchor && openLearningTaskId ? (
+          <div className="quick-learning-anchor">
+            <LearningPackWorkspace taskId={openLearningTaskId} />
+          </div>
+        ) : null}
         <div className="task-scroll-region">
           <TaskList />
         </div>
@@ -129,22 +142,24 @@ function MainApp(): React.JSX.Element {
         ) : null}
       </AnimatePresence>
       <CommandPalette />
+      <MobileNav />
     </div>
   )
 }
 
 function MiniApp(): React.JSX.Element {
-  const initialize = useNudgeStore((state) => state.initialize)
+  const initializeMini = useNudgeStore((state) => state.initializeMini)
   const initialized = useNudgeStore((state) => state.initialized)
   const error = useNudgeStore((state) => state.error)
   useEffect(() => {
-    void initialize()
-  }, [initialize])
+    void initializeMini()
+  }, [initializeMini])
   if (initialized) return <MiniFocus />
-  return error ? <ErrorScreen message={error} onRetry={() => void initialize()} /> : <LoadingScreen />
+  return error ? <ErrorScreen message={error} onRetry={() => void initializeMini()} /> : <LoadingScreen />
 }
 
 export default function App(): React.JSX.Element {
   const mini = new URLSearchParams(window.location.search).get('mini') === '1'
+    || (Boolean(window.__TAURI_INTERNALS__) && getCurrentWebviewWindow().label === 'focus')
   return <ToastProvider>{mini ? <MiniApp /> : <MainApp />}</ToastProvider>
 }

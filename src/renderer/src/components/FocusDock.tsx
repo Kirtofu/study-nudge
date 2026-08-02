@@ -17,6 +17,7 @@ function useNow(active: boolean): number {
 export function FocusDock(): React.JSX.Element {
   const focusState = useNudgeStore((state) => state.focusState)
   const focusStats = useNudgeStore((state) => state.focusStats)
+  const settings = useNudgeStore((state) => state.settings)
   const tasks = useNudgeStore((state) => state.tasks)
   const startFocus = useNudgeStore((state) => state.startFocus)
   const pauseFocus = useNudgeStore((state) => state.pauseFocus)
@@ -49,7 +50,7 @@ export function FocusDock(): React.JSX.Element {
             <Play size={14} fill="currentColor" aria-hidden="true" />自由计时
           </button>
           <button type="button" className="primary-button" onClick={() => void startFocus('pomodoro')}>
-            <Play size={14} fill="currentColor" aria-hidden="true" />25 分钟专注
+            <Play size={14} fill="currentColor" aria-hidden="true" />{settings?.pomodoroFocusMinutes ?? 25} 分钟专注
           </button>
         </div>
       </section>
@@ -102,6 +103,7 @@ export function FocusDock(): React.JSX.Element {
 
 export function MiniFocus(): React.JSX.Element {
   const focusState = useNudgeStore((state) => state.focusState)
+  const settings = useNudgeStore((state) => state.settings)
   const tasks = useNudgeStore((state) => state.tasks)
   const startFocus = useNudgeStore((state) => state.startFocus)
   const pauseFocus = useNudgeStore((state) => state.pauseFocus)
@@ -118,7 +120,7 @@ export function MiniFocus(): React.JSX.Element {
         <h1>准备好安静做一件事了吗？</h1>
         <div className="mini-actions">
           <button type="button" className="secondary-button" onClick={() => void startFocus('stopwatch')}><RotateCcw size={14} />自由计时</button>
-          <button type="button" className="primary-button" onClick={() => void startFocus('pomodoro')}><Play size={14} fill="currentColor" />开始 25 分钟</button>
+          <button type="button" className="primary-button" onClick={() => void startFocus('pomodoro')}><Play size={14} fill="currentColor" />开始 {settings?.pomodoroFocusMinutes ?? 25} 分钟</button>
         </div>
       </main>
     )
@@ -136,7 +138,7 @@ export function MiniFocus(): React.JSX.Element {
         <button type="button" className="mini-link" onClick={() => void api.desktop.showMainWindow()}>打开主窗口</button>
       </div>
       <time>{formatTimer(remaining)}</time>
-      <p>{task?.title ?? (focusState.phase === 'break' ? '离开屏幕，活动一下' : '自由专注')}</p>
+      <p>{task?.title ?? (focusState.phase === 'break' ? '离开屏幕，活动一下' : focusState.mode === 'pomodoro' ? '番茄专注' : '自由专注')}</p>
       <div className="mini-controls">
         <button type="button" className="icon-button" aria-label={focusState.status === 'paused' ? '继续' : '暂停'} onClick={() => void (focusState.status === 'paused' ? resumeFocus() : pauseFocus())}>
           {focusState.status === 'paused' ? <Play size={16} fill="currentColor" /> : <Pause size={16} fill="currentColor" />}

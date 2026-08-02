@@ -1,20 +1,28 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   ArchiveRestore,
   BellRing,
+  Bot,
+  Cloud,
+  CloudOff,
   Clock3,
   Download,
+  FileText,
   Keyboard,
+  LoaderCircle,
+  LockKeyhole,
   ListTodo,
   PlayCircle,
   Power,
+  RefreshCw,
   Save,
   Target,
+  TestTube2,
   Trash2,
   Upload,
   X
 } from 'lucide-react'
-import type { AppSettings, TaskList } from '@shared/types'
+import type { AppSettings, RecommendationProvider, TaskList } from '@shared/types'
 import { api } from '../bridge'
 import { useNudgeStore } from '../store'
 import { useToast } from './Toast'
@@ -86,8 +94,59 @@ export function SettingsDrawer(): React.JSX.Element | null {
   const updateSettings = useNudgeStore((state) => state.updateSettings)
   const refreshTasks = useNudgeStore((state) => state.refreshTasks)
   const refreshStats = useNudgeStore((state) => state.refreshStats)
+  const recommendationSettings = useNudgeStore((state) => state.recommendationSettings)
+  const syncSettings = useNudgeStore((state) => state.syncSettings)
+  const syncState = useNudgeStore((state) => state.syncState)
+  const syncConflicts = useNudgeStore((state) => state.syncConflicts)
+  const updateRecommendationSettings = useNudgeStore((state) => state.updateRecommendationSettings)
+  const configureSync = useNudgeStore((state) => state.configureSync)
+  const runSync = useNudgeStore((state) => state.runSync)
+  const disconnectSync = useNudgeStore((state) => state.disconnectSync)
+  const refreshSync = useNudgeStore((state) => state.refreshSync)
   const [saving, setSaving] = useState(false)
+  const [testingAi, setTestingAi] = useState(false)
+  const [testingSync, setTestingSync] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const [aiDraft, setAiDraft] = useState({
+    provider: 'offline' as RecommendationProvider,
+    endpoint: 'https://api.openai.com/v1',
+    model: 'gpt-4.1-mini',
+    networkEnabled: false,
+    sendNotes: false,
+    apiKey: ''
+  })
+  const [syncDraft, setSyncDraft] = useState({
+    serverUrl: '', username: '', password: '', passphrase: '',
+    remotePath: 'Nudge/nudge-v2.enc', rememberPassphrase: false, deviceName: ''
+  })
   const showToast = useToast()
+
+  useEffect(() => {
+    if (!recommendationSettings) return
+    setAiDraft((draft) => ({
+      ...draft,
+      provider: recommendationSettings.provider,
+      endpoint: recommendationSettings.endpoint,
+      model: recommendationSettings.model,
+      networkEnabled: recommendationSettings.networkEnabled,
+      sendNotes: recommendationSettings.sendNotes,
+      apiKey: ''
+    }))
+  }, [recommendationSettings])
+
+  useEffect(() => {
+    if (!syncSettings) return
+    setSyncDraft((draft) => ({
+      ...draft,
+      serverUrl: syncSettings.serverUrl,
+      username: syncSettings.username,
+      remotePath: syncSettings.remotePath,
+      rememberPassphrase: syncSettings.rememberPassphrase,
+      deviceName: syncSettings.deviceName,
+      password: '',
+      passphrase: ''
+    }))
+  }, [syncSettings])
 
   if (!settings) return null
 
@@ -174,6 +233,109 @@ export function SettingsDrawer(): React.JSX.Element | null {
               <small>小时</small>
             </span>
           </label>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section-title">
+            <Bot size={17} aria-hidden="true" />
+            <div>
+              <h2>学习包推荐</h2>
+              <p>默认离线生成模板；只有你主动点击生成时才会联网。</p>
+            </div>
+          </div>
+          <label className="settings-field">
+            <span>推荐方式</span>
+            <select value={aiDraft.provider} onChange={(event) => setAiDraft({ ...aiDraft, provider: event.target.value as RecommendationProvider })}>
+              <option value="offline">离线模板</option>
+              <option value="openai-compatible">OpenAI-compatible</option>
+              <option value="ollama">Ollama 本机模型</option>
+            </select>
+          </label>
+          {aiDraft.provider !== 'offline' ? (
+            <>
+              <label className="settings-field"><span>服务地址</span><input value={aiDraft.endpoint} onChange={(event) => setAiDraft({ ...aiDraft, endpoint: event.target.value })} placeholder={aiDraft.provider === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com/v1'} /></label>
+              <label className="settings-field"><span>模型</span><input value={aiDraft.model} onChange={(event) => setAiDraft({ ...aiDraft, model: event.target.value })} /></label>
+              {aiDraft.provider === 'openai-compatible' ? (
+                <label className="settings-field"><span>API 密钥</span><input type="password" value={aiDraft.apiKey} onChange={(event) => setAiDraft({ ...aiDraft, apiKey: event.target.value })} placeholder={recommendationSettings?.hasApiKey ? '已安全保存；留空则保持不变' : '只保存到 Stronghold'} autoComplete="off" /></label>
+              ) : null}
+              <div className="settings-toggle-row"><span><Cloud size={15} />允许联网推荐</span><Toggle checked={aiDraft.networkEnabled} label="允许联网推荐" onChange={(networkEnabled) => setAiDraft({ ...aiDraft, networkEnabled })} /></div>
+              <div className="settings-toggle-row"><span><FileText size={15} />允许发送任务备注</span><Toggle checked={aiDraft.sendNotes} label="允许发送任务备注" onChange={(sendNotes) => setAiDraft({ ...aiDraft, sendNotes })} /></div>
+              <p className="settings-privacy-note">生成前仍会逐次确认发送范围。API 密钥不写入数据库、日志、备份或同步文件。</p>
+            </>
+          ) : (
+            <p className="settings-privacy-note">离线模板会即时创建资料搜索入口、视频搜索入口与五阶段学习路线。</p>
+          )}
+          <div className="settings-inline-actions">
+            {aiDraft.provider !== 'offline' ? (
+              <button type="button" className="secondary-button" disabled={testingAi} onClick={() => {
+                setTestingAi(true)
+                void api.recommendation.testConnection(aiDraft).then((result) => showToast({ message: result.message })).catch((error) => showToast({ message: '连接测试失败', detail: error instanceof Error ? error.message : '请检查配置' })).finally(() => setTestingAi(false))
+              }}><TestTube2 size={14} />{testingAi ? '测试中…' : '测试连接'}</button>
+            ) : null}
+            <button type="button" className="primary-button" onClick={() => {
+              setSaving(true)
+              void updateRecommendationSettings(aiDraft).then(() => {
+                setAiDraft({ ...aiDraft, apiKey: '' })
+                showToast({ message: '推荐设置已保存' })
+              }).catch((error) => showToast({ message: '推荐设置没有保存', detail: error instanceof Error ? error.message : '请检查内容' })).finally(() => setSaving(false))
+            }}><Save size={14} />保存推荐设置</button>
+          </div>
+        </section>
+
+        <section className="settings-section">
+          <div className="settings-section-title">
+            <Cloud size={17} aria-hidden="true" />
+            <div>
+              <h2>加密 WebDAV 同步</h2>
+              <p>服务器只会看到 Argon2id＋XChaCha20-Poly1305 加密后的快照。</p>
+            </div>
+          </div>
+          <label className="settings-field"><span>服务器地址</span><input value={syncDraft.serverUrl} onChange={(event) => setSyncDraft({ ...syncDraft, serverUrl: event.target.value })} placeholder="https://cloud.example.com/remote.php/dav/files/name/" inputMode="url" /></label>
+          <label className="settings-field"><span>用户名</span><input value={syncDraft.username} onChange={(event) => setSyncDraft({ ...syncDraft, username: event.target.value })} autoComplete="username" /></label>
+          <label className="settings-field"><span>WebDAV 密码</span><input type="password" value={syncDraft.password} onChange={(event) => setSyncDraft({ ...syncDraft, password: event.target.value })} placeholder={syncSettings?.hasCredentials ? '已保存在 Stronghold；修改时重新输入' : ''} autoComplete="new-password" /></label>
+          <label className="settings-field"><span>独立同步口令</span><input type="password" value={syncDraft.passphrase} onChange={(event) => setSyncDraft({ ...syncDraft, passphrase: event.target.value })} placeholder="至少 8 个字符；其他设备需要相同口令" autoComplete="new-password" /></label>
+          <label className="settings-field"><span>远端文件</span><input value={syncDraft.remotePath} onChange={(event) => setSyncDraft({ ...syncDraft, remotePath: event.target.value })} /></label>
+          <label className="settings-field"><span>设备名称</span><input value={syncDraft.deviceName} onChange={(event) => setSyncDraft({ ...syncDraft, deviceName: event.target.value })} /></label>
+          <div className="settings-toggle-row"><span><LockKeyhole size={15} />在本机记住同步口令</span><Toggle checked={syncDraft.rememberPassphrase} label="记住同步口令" onChange={(rememberPassphrase) => setSyncDraft({ ...syncDraft, rememberPassphrase })} /></div>
+          <div className={`sync-state-row sync-${syncState?.status ?? 'disconnected'}`}>
+            {syncState?.status === 'syncing' ? <LoaderCircle size={15} className="spin" /> : syncSettings?.enabled ? <Cloud size={15} /> : <CloudOff size={15} />}
+            <span>{syncState?.status === 'syncing' ? '正在同步' : syncState?.lastSyncedAt ? `上次同步 ${new Date(syncState.lastSyncedAt).toLocaleString()}` : syncSettings?.enabled ? '已配置，等待首次同步' : '尚未连接'}</span>
+            {syncState?.pendingChanges ? <small>{syncState.pendingChanges} 项待上传</small> : null}
+          </div>
+          {syncState?.lastError ? <p className="settings-error-note">{syncState.lastError}</p> : null}
+          <div className="settings-inline-actions sync-actions">
+            <button type="button" className="secondary-button" disabled={testingSync || !syncDraft.serverUrl || !syncDraft.password || !syncDraft.passphrase} onClick={() => {
+              setTestingSync(true)
+              void api.sync.test(syncDraft).then((result) => showToast({ message: result.message })).catch((error) => showToast({ message: 'WebDAV 测试失败', detail: error instanceof Error ? error.message : '请检查配置' })).finally(() => setTestingSync(false))
+            }}><TestTube2 size={14} />{testingSync ? '测试中…' : '测试连接'}</button>
+            <button type="button" className="primary-button" disabled={!syncDraft.serverUrl || !syncDraft.password || !syncDraft.passphrase} onClick={() => {
+              setSaving(true)
+              void configureSync(syncDraft).then(() => {
+                setSyncDraft({ ...syncDraft, password: '', passphrase: '' })
+                showToast({ message: 'WebDAV 已安全配置' })
+              }).catch((error) => showToast({ message: '同步配置没有保存', detail: error instanceof Error ? error.message : '请检查内容' })).finally(() => setSaving(false))
+            }}><Save size={14} />保存配置</button>
+            {syncSettings?.enabled ? <button type="button" className="secondary-button" disabled={syncing} onClick={() => {
+              setSyncing(true)
+              void runSync().then(() => showToast({ message: '同步已经完成' })).catch((error) => showToast({ message: '同步没有完成', detail: error instanceof Error ? error.message : '请稍后重试' })).finally(() => setSyncing(false))
+            }}><RefreshCw size={14} />{syncing ? '同步中…' : '立即同步'}</button> : null}
+            {syncSettings?.enabled ? <button type="button" className="text-button danger-text" onClick={() => {
+              if (!window.confirm('断开 WebDAV？远端加密文件不会被删除。')) return
+              void disconnectSync().then(() => showToast({ message: 'WebDAV 已断开' }))
+            }}><CloudOff size={14} />断开</button> : null}
+          </div>
+          {syncConflicts.length ? (
+            <div className="sync-conflicts">
+              <strong>同步冲突 · {syncConflicts.length}</strong>
+              {syncConflicts.slice(0, 5).map((conflict) => (
+                <div key={conflict.id} className="sync-conflict-row">
+                  <span>{conflict.entityType} · {conflict.entityId.slice(0, 8)}</span>
+                  <button type="button" className="text-button" onClick={() => void api.sync.resolveConflict(conflict.id, 'local').then(refreshSync)}>保留本机</button>
+                  <button type="button" className="text-button" onClick={() => void api.sync.resolveConflict(conflict.id, 'remote').then(refreshSync)}>采用远端</button>
+                </div>
+              ))}
+            </div>
+          ) : null}
         </section>
 
         <section className="settings-section">

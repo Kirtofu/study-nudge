@@ -1,0 +1,97 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Nudge",
+  "version": "2.0.0-beta.1",
+  "identifier": "io.github.kirtofu.nudge",
+  "build": {
+    "frontendDist": "../dist",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeDevCommand": "npm run dev:web",
+    "beforeBuildCommand": "npm run build:web"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Nudge",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 900,
+        "minHeight": 620,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "transparent": false,
+        "backgroundColor": "#f5f4ed",
+        "center": true,
+        "visible": true
+      },
+      {
+        "label": "focus",
+        "create": true,
+        "title": "Nudge 专注",
+        "width": 360,
+        "height": 190,
+        "minWidth": 360,
+        "minHeight": 190,
+        "maxWidth": 520,
+        "maxHeight": 260,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "transparent": false,
+        "backgroundColor": "#f5f4ed",
+        "center": true,
+        "visible": false
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self' customprotocol: asset:; connect-src ipc: http://ipc.localhost https://ipc.localhost; img-src 'self' asset: data: https:; style-src 'self' 'unsafe-inline'; font-src 'self' data:"
+    },
+    "withGlobalTauri": false
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "publisher": "Nudge",
+    "copyright": "Copyright © 2026 Nudge contributors",
+    "category": "Productivity",
+    "shortDescription": "离线优先的待办、专注与学习规划工具",
+    "longDescription": "Nudge 使用赭墨纸感界面，把任务、专注计时、资料视频与可编辑学习路线放在一个本地优先的跨平台应用中。",
+    "resources": {
+      "../study-nudge.ps1": "legacy/study-nudge.ps1",
+      "../data.json": "legacy/data.json"
+    },
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "both",
+        "displayLanguageSelector": true,
+        "languages": ["SimpChinese", "English"]
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    },
+    "android": {
+      "minSdkVersion": 29,
+      "debugApplicationIdSuffix": ".debug"
+    },
+    "iOS": {
+      "minimumSystemVersion": "16.0"
+    }
+  }
+}

@@ -12,7 +12,7 @@
 
 ## Physical Scene
 
-用户在白天或暖色台灯下长时间使用 Windows 电脑，需要一个不会刺眼、不会打断思路、又能在完成动作时给出明确回应的桌面工具，因此首版采用浅色主题。
+用户会在白天或暖色台灯下长时间使用电脑，也会在通勤或临时记录时使用手机和平板；界面需要不刺眼、不打断思路，并在完成、拖拽、生成和同步时给出明确回应，因此首版统一采用浅色主题。
 
 ## Color Strategy
 
@@ -47,6 +47,9 @@ Restrained。中性色承担绝大部分面积，赭橙只用于主要操作、�
 - Window baseline: 1180 × 760; minimum 900 × 620.
 - Title bar: 42px.
 - Sidebar: 232px; primary timeline fills remaining space; detail drawer: 340px.
+- Desktop learning pack: 30% resources / 30% videos / 40% roadmap.
+- Tablet landscape: resources and videos share the first row; roadmap spans the second row.
+- Tablet portrait and phone: full-screen learning workspace with three 44px tabs and safe-area padding.
 - 4pt spacing scale: 4, 8, 12, 16, 24, 32, 48px.
 - Product surfaces use 12–16px radii. Cards never nest inside cards.
 - Under 1040px the detail drawer overlays; under 940px the sidebar becomes a compact rail.
@@ -58,6 +61,8 @@ Restrained。中性色承担绝大部分面积，赭橙只用于主要操作、�
 - Inputs: visible labels, warm-white fill, full perimeter border, 2px accent focus ring.
 - Menus and command palette render in the top layer or portal to avoid clipping.
 - Destructive actions use immediate removal plus a five-second undo toast.
+- Learning resources expose actions on hover/focus and keep them visible in touch environments.
+- Roadmap nodes support drag, connect, auto-layout, status cycling, undo and a list fallback.
 
 ## Motion
 

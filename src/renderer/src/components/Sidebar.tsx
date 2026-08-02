@@ -153,7 +153,18 @@ export function Sidebar(): React.JSX.Element {
       </nav>
 
       <div className="sidebar-footer">
-        <button type="button" className="focus-summary" onClick={() => void api.desktop.toggleMiniWindow()}>
+        <button
+          type="button"
+          className="focus-summary"
+          onClick={() => {
+            void api.desktop.toggleMiniWindow().catch((error) => {
+              showToast({
+                message: '专注迷你窗没有打开',
+                detail: error instanceof Error ? error.message : '请稍后重试'
+              })
+            })
+          }}
+        >
           <span className="focus-summary-ring" style={{ '--progress': dailyProgress } as React.CSSProperties}>
             <TimerReset size={16} aria-hidden="true" />
           </span>

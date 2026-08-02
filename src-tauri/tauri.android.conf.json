@@ -1,0 +1,14 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Nudge",
+        "decorations": true,
+        "fullscreen": false,
+        "backgroundColor": "#f5f4ed",
+        "visible": true
+      }
+    ]
+  }
+}

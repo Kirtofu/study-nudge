@@ -1,0 +1,277 @@
+name: Cross-platform release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing or new release tag
+        required: true
+        default: v2.0.0-beta.1
+      publish:
+        description: Publish or update the GitHub prerelease after all builds pass
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  desktop:
+    name: ${{ matrix.label }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Windows x64
+            os: windows-2022
+            platform: windows-x64
+            archive_arch: x64
+          - label: Linux x64
+            os: ubuntu-22.04
+            platform: linux-x64
+            archive_arch: x64
+          - label: Linux ARM64
+            os: ubuntu-24.04-arm
+            platform: linux-arm64
+            archive_arch: arm64
+          - label: macOS Intel
+            os: macos-15-intel
+            platform: macos-x64
+            archive_arch: x64
+          - label: macOS Apple Silicon
+            os: macos-15
+            platform: macos-arm64
+            archive_arch: arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows packages
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          npx tauri build --bundles nsis
+          New-Item -ItemType Directory -Force artifacts, portable | Out-Null
+          $installer = Get-ChildItem src-tauri/target/release/bundle/nsis -Filter *.exe | Select-Object -First 1
+          Copy-Item $installer.FullName "artifacts/Nudge-$version-windows-x64-setup.exe"
+          Copy-Item src-tauri/target/release/nudge.exe portable/Nudge.exe
+          Compress-Archive -Path portable/* -DestinationPath "artifacts/Nudge-$version-windows-x64-portable.zip"
+
+      - name: Build Linux packages
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          npx tauri build --bundles appimage,deb
+          mkdir -p artifacts
+          appimage=$(find src-tauri/target/release/bundle/appimage -type f -name '*.AppImage' | head -n 1)
+          deb=$(find src-tauri/target/release/bundle/deb -type f -name '*.deb' | head -n 1)
+          cp "$appimage" "artifacts/Nudge-$version-linux-${{ matrix.archive_arch }}.AppImage"
+          cp "$deb" "artifacts/Nudge-$version-linux-${{ matrix.archive_arch }}.deb"
+
+      - name: Build macOS packages
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          npx tauri build --bundles app,dmg
+          mkdir -p artifacts
+          dmg=$(find src-tauri/target/release/bundle/dmg -type f -name '*.dmg' | head -n 1)
+          app=$(find src-tauri/target/release/bundle/macos -type d -name '*.app' | head -n 1)
+          cp "$dmg" "artifacts/Nudge-$version-macos-${{ matrix.archive_arch }}.dmg"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "artifacts/Nudge-$version-macos-${{ matrix.archive_arch }}.app.zip"
+
+      - name: Upload desktop artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.platform }}
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+
+  android:
+    name: Android ARM64 test APK
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android platform and NDK
+        shell: bash
+        run: |
+          sdkmanager "platforms;android-35" "build-tools;35.0.0" "ndk;27.1.12297006"
+          echo "NDK_HOME=$ANDROID_HOME/ndk/27.1.12297006" >> "$GITHUB_ENV"
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build debug APK
+        run: npx tauri android build --debug --apk --target aarch64 --ci
+
+      - name: Collect APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          mkdir -p artifacts
+          apk=$(find src-tauri/gen/android/app/build/outputs/apk -type f -name '*.apk' | head -n 1)
+          cp "$apk" "artifacts/Nudge-$version-android-arm64-debug.apk"
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-arm64
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+
+  ios:
+    name: iOS simulator app
+    runs-on: macos-15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Initialize iOS project
+        shell: bash
+        run: |
+          if [ ! -d src-tauri/gen/apple ]; then
+            npx tauri ios init --ci
+          fi
+
+      - name: Build simulator app
+        run: npx tauri ios build --target aarch64-sim --debug --ci
+
+      - name: Collect simulator app
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          mkdir -p artifacts
+          app=$(find src-tauri -type d -name '*.app' | head -n 1)
+          test -n "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" "artifacts/Nudge-$version-ios-simulator-arm64.app.zip"
+
+      - name: Upload iOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-arm64
+          path: artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub prerelease
+    needs: [desktop, android, ios]
+    if: github.event_name == 'push' || inputs.publish == true
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Create checksums
+        shell: bash
+        run: |
+          cd release-assets
+          sha256sum * > SHA256SUMS.txt
+
+      - name: Create or update prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          else
+            gh release create "$RELEASE_TAG" release-assets/* \
+              --target "$GITHUB_SHA" \
+              --title "Nudge $RELEASE_TAG" \
+              --notes-file docs/release-notes-v2.0.0-beta.1.md \
+              --prerelease
+          fi

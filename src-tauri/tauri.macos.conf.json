@@ -1,0 +1,42 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Nudge",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 900,
+        "minHeight": 620,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": true,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true,
+        "transparent": false,
+        "backgroundColor": "#f5f4ed",
+        "center": true,
+        "visible": true
+      },
+      {
+        "label": "focus",
+        "create": true,
+        "title": "Nudge 专注",
+        "width": 360,
+        "height": 190,
+        "minWidth": 360,
+        "minHeight": 190,
+        "maxWidth": 520,
+        "maxHeight": 260,
+        "resizable": true,
+        "fullscreen": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "transparent": false,
+        "backgroundColor": "#f5f4ed",
+        "center": true,
+        "visible": false
+      }
+    ]
+  }
+}

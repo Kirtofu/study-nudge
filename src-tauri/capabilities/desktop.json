@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "desktop",
+  "description": "Nudge desktop capabilities for local data, dialogs, notifications, links and Stronghold secrets",
+  "platforms": ["windows", "macOS", "linux"],
+  "windows": ["main", "focus"],
+  "permissions": [
+    "core:default",
+    "dialog:default",
+    "notification:default",
+    "opener:default",
+    "stronghold:default"
+  ]
+}

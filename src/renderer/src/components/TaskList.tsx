@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   CalendarClock,
+  BookOpen,
   Check,
   CheckCircle2,
   Circle,
@@ -32,6 +33,7 @@ import type { Priority, Task } from '@shared/types'
 import { useNudgeStore } from '../store'
 import { filterTasks, formatClock, groupLabel } from '../utils'
 import { useToast } from './Toast'
+import { LearningPackInline } from './LearningPackWorkspace'
 
 const GROUPS = ['上午', '下午', '晚间', '随时'] as const
 
@@ -47,6 +49,10 @@ function SortableTaskRow({ task }: { task: Task }): React.JSX.Element {
   const selectTask = useNudgeStore((state) => state.selectTask)
   const completeTask = useNudgeStore((state) => state.completeTask)
   const startFocus = useNudgeStore((state) => state.startFocus)
+  const openLearning = useNudgeStore((state) => state.openLearning)
+  const closeLearning = useNudgeStore((state) => state.closeLearning)
+  const openLearningTaskId = useNudgeStore((state) => state.openLearningTaskId)
+  const learningPack = useNudgeStore((state) => state.learningPacks[task.id])
   const [completing, setCompleting] = useState(false)
   const showToast = useToast()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
@@ -74,7 +80,7 @@ function SortableTaskRow({ task }: { task: Task }): React.JSX.Element {
   }
 
   return (
-    <motion.article
+    <motion.div
       ref={setNodeRef}
       layout
       initial={{ opacity: 0, y: 7 }}
@@ -82,9 +88,12 @@ function SortableTaskRow({ task }: { task: Task }): React.JSX.Element {
       exit={{ opacity: 0, x: 18, filter: 'blur(2px)' }}
       transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
       style={{ transform: CSS.Transform.toString(transform), transition }}
-      className={`task-row ${isDragging ? 'is-dragging' : ''} ${completing ? 'is-completing' : ''} ${task.status === 'completed' ? 'is-completed' : ''}`}
-      onClick={() => selectTask(task.id)}
+      className={`task-item-shell ${isDragging ? 'is-dragging' : ''}`}
     >
+      <article
+        className={`task-row ${isDragging ? 'is-dragging' : ''} ${completing ? 'is-completing' : ''} ${task.status === 'completed' ? 'is-completed' : ''}`}
+        onClick={() => selectTask(task.id)}
+      >
       <button
         type="button"
         className="drag-handle"
@@ -150,6 +159,31 @@ function SortableTaskRow({ task }: { task: Task }): React.JSX.Element {
       <div className="task-actions">
         <button
           type="button"
+          className={`icon-button learning-task-button ${learningPack ? 'has-pack' : ''}`}
+          aria-label={`${openLearningTaskId === task.id ? '收起' : '打开'}“${task.title}”学习包`}
+          aria-expanded={openLearningTaskId === task.id}
+          title="学习包"
+          onClick={(event) => {
+            event.stopPropagation()
+            if (openLearningTaskId === task.id) closeLearning()
+            else void openLearning(task.id)
+          }}
+        >
+          {learningPack ? (
+            <span
+              className="task-learning-ring"
+              style={{
+                '--task-learning-progress': learningPack.nodes.length
+                  ? learningPack.nodes.filter((node) => node.status === 'completed').length / learningPack.nodes.length
+                  : 0
+              } as React.CSSProperties}
+            >
+              <BookOpen size={12} aria-hidden="true" />
+            </span>
+          ) : <BookOpen size={15} aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
           className="icon-button focus-task-button"
           aria-label={`专注于“${task.title}”`}
           title="开始专注"
@@ -163,7 +197,11 @@ function SortableTaskRow({ task }: { task: Task }): React.JSX.Element {
         </button>
       </div>
       {currentView === 'completed' ? <CheckCircle2 className="completed-stamp" size={17} aria-hidden="true" /> : null}
-    </motion.article>
+      </article>
+      <AnimatePresence initial={false}>
+        <LearningPackInline task={task} />
+      </AnimatePresence>
+    </motion.div>
   )
 }
 
