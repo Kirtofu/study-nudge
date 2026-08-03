@@ -81,6 +81,18 @@ export interface FocusStats {
   sessions: FocusSession[]
 }
 
+export interface FocusHistoryQuery {
+  range?: '7d' | '30d' | 'all'
+  cursor?: string | null
+  limit?: number
+}
+
+export interface FocusHistoryPage {
+  items: FocusSession[]
+  nextCursor: string | null
+  total: number
+}
+
 export interface AppSettings {
   dailyGoalMinutes: number
   longTermGoalHours: number
@@ -183,6 +195,7 @@ export interface SyncSettings {
   username: string
   remotePath: string
   rememberPassphrase: boolean
+  syncV3Confirmed: boolean
   hasCredentials: boolean
   deviceId: string
   deviceName: string
@@ -217,6 +230,36 @@ export interface ConfigureSyncInput {
   deviceName?: string
 }
 
+export interface SecretStoreStatus {
+  available: boolean
+  backend: string
+  migration: 'pending' | 'completed' | 'not-needed' | 'unknown'
+  detail: string | null
+}
+
+export type NudgeErrorCode =
+  | 'validation'
+  | 'auth'
+  | 'offline'
+  | 'conflict'
+  | 'secret-store'
+  | 'canceled'
+  | 'internal'
+
+export interface BootstrapSnapshot {
+  tasks: Task[]
+  lists: TaskList[]
+  tags: Tag[]
+  settings: AppSettings
+  focusState: FocusState
+  focusStats: FocusStats
+  recommendationSettings: RecommendationSettings
+  syncSettings: SyncSettings
+  syncState: SyncState
+  syncConflicts: SyncConflict[]
+  secretStore: SecretStoreStatus
+}
+
 export interface CreateTaskInput {
   title: string
   notes?: string
@@ -235,6 +278,22 @@ export interface UpdateTaskInput extends Partial<Omit<CreateTaskInput, 'title'>>
   status?: TaskStatus
 }
 
+export interface EntityChangeSet {
+  upsertedTasks: Task[]
+  removedTaskIds: string[]
+  upsertedTags: Tag[]
+}
+
+export interface TaskMutationResult {
+  task: Task | null
+  changes: EntityChangeSet
+}
+
+export interface TaskOrderPatch {
+  id: string
+  position: number
+}
+
 export interface BackupResult {
   canceled: boolean
   path?: string
@@ -242,14 +301,17 @@ export interface BackupResult {
 }
 
 export interface NudgeBridge {
+  app: {
+    bootstrap: () => Promise<BootstrapSnapshot>
+  }
   tasks: {
     list: () => Promise<Task[]>
-    create: (input: CreateTaskInput) => Promise<Task>
-    update: (id: string, input: UpdateTaskInput) => Promise<Task>
-    complete: (id: string, completed: boolean) => Promise<Task>
-    delete: (id: string) => Promise<void>
-    restore: (id: string) => Promise<Task>
-    reorder: (ids: string[]) => Promise<void>
+    create: (input: CreateTaskInput) => Promise<TaskMutationResult>
+    update: (id: string, input: UpdateTaskInput) => Promise<TaskMutationResult>
+    complete: (id: string, completed: boolean) => Promise<TaskMutationResult>
+    delete: (id: string) => Promise<TaskMutationResult>
+    restore: (id: string) => Promise<TaskMutationResult>
+    reorder: (ids: string[]) => Promise<TaskOrderPatch[]>
   }
   lists: {
     list: () => Promise<TaskList[]>
@@ -263,6 +325,7 @@ export interface NudgeBridge {
   focus: {
     getState: () => Promise<FocusState>
     getStats: () => Promise<FocusStats>
+    history: (query: FocusHistoryQuery) => Promise<FocusHistoryPage>
     start: (input: { mode: 'pomodoro' | 'stopwatch'; taskId?: string | null }) => Promise<FocusState>
     pause: () => Promise<FocusState>
     resume: () => Promise<FocusState>
@@ -319,14 +382,22 @@ export interface NudgeBridge {
     run: () => Promise<SyncState>
     disconnect: () => Promise<void>
     getSettings: () => Promise<SyncSettings>
+    confirmUpgrade: () => Promise<SyncSettings>
     getState: () => Promise<SyncState>
     listConflicts: () => Promise<SyncConflict[]>
     resolveConflict: (id: string, choice: 'local' | 'remote' | 'keep-both') => Promise<void>
     onStateChanged: (callback: (state: SyncState) => void) => () => void
   }
+  secrets: {
+    status: () => Promise<SecretStoreStatus>
+    migrateLegacy: () => Promise<SecretStoreStatus>
+  }
   backup: {
     exportJson: () => Promise<BackupResult>
     importJson: (mode: 'merge' | 'replace') => Promise<BackupResult>
+  }
+  media: {
+    thumbnailDataUrl: (source: string) => Promise<string>
   }
   desktop: {
     toggleMiniWindow: () => Promise<void>

@@ -1,14 +1,14 @@
 import { addDays, format } from 'date-fns'
 import { invoke } from '@tauri-apps/api/core'
 import { listen, type UnlistenFn } from '@tauri-apps/api/event'
-import { appDataDir, join } from '@tauri-apps/api/path'
 import { open, save } from '@tauri-apps/plugin-dialog'
-import { Stronghold, type Client, type Store } from '@tauri-apps/plugin-stronghold'
 import type {
   AppSettings,
+  BootstrapSnapshot,
   ConfigureSyncInput,
   CreateTaskInput,
   FocusSession,
+  FocusHistoryPage,
   FocusState,
   FocusStats,
   LearningEdge,
@@ -19,6 +19,7 @@ import type {
   LearningSection,
   NudgeBridge,
   RecommendationSettings,
+  SecretStoreStatus,
   SyncConflict,
   SyncSettings,
   SyncState,
@@ -36,15 +37,6 @@ declare global {
 }
 
 const isTauri = typeof window !== 'undefined' && Boolean(window.__TAURI_INTERNALS__)
-const encoder = new TextEncoder()
-const decoder = new TextDecoder()
-const vaultPassword = 'Nudge::local-stronghold::v2'
-const vaultClient = 'nudge-secrets-v2'
-const SECRET_API_KEY = 'recommendation-api-key'
-const SECRET_WEBDAV_PASSWORD = 'webdav-password'
-const SECRET_SYNC_PASSPHRASE = 'sync-passphrase'
-let strongholdPromise: Promise<{ stronghold: Stronghold; client: Client; store: Store }> | null = null
-let sessionSyncPassphrase = ''
 
 const LOCAL_CHANGE_COMMANDS = new Set([
   'tasks_create', 'tasks_update', 'tasks_complete', 'tasks_delete', 'tasks_restore', 'tasks_reorder',
@@ -64,9 +56,19 @@ async function call<T>(command: string, args?: Record<string, unknown>): Promise
     }
     return result
   } catch (error) {
-    if (error instanceof Error) throw error
-    if (typeof error === 'string') throw new Error(error)
-    throw new Error('本地命令没有执行成功')
+    const message = error instanceof Error
+      ? error.message
+      : typeof error === 'string' ? error : '本地命令没有执行成功'
+    const code = /密钥库|密钥/.test(message) ? 'secret-store'
+      : /密码|凭据|权限/.test(message) ? 'auth'
+        : /离线|网络|连接|超时/.test(message) ? 'offline'
+          : /冲突/.test(message) ? 'conflict'
+            : /取消/.test(message) ? 'canceled'
+              : /无效|不能为空|最多|至少|格式/.test(message) ? 'validation' : 'internal'
+    const normalized = new Error(message) as Error & { code: string; retryable: boolean }
+    normalized.code = code
+    normalized.retryable = ['offline', 'conflict', 'internal'].includes(code)
+    throw normalized
   }
 }
 
@@ -83,42 +85,28 @@ function subscribe<T>(eventName: string, callback: (payload: T) => void): () => 
   }
 }
 
-async function getSecretStore(): Promise<{ stronghold: Stronghold; client: Client; store: Store }> {
-  if (!strongholdPromise) {
-    strongholdPromise = (async () => {
-      const path = await join(await appDataDir(), 'nudge-vault.hold')
-      const stronghold = await Stronghold.load(path, vaultPassword)
-      let client: Client
-      try {
-        client = await stronghold.loadClient(vaultClient)
-      } catch {
-        client = await stronghold.createClient(vaultClient)
-      }
-      return { stronghold, client, store: client.getStore() }
-    })()
-  }
-  return strongholdPromise
-}
-
-async function readSecret(key: string): Promise<string> {
-  const { store } = await getSecretStore()
-  const value = await store.get(key)
-  return value ? decoder.decode(value) : ''
-}
-
-async function writeSecret(key: string, value: string): Promise<void> {
-  const { stronghold, store } = await getSecretStore()
-  if (value) await store.insert(key, Array.from(encoder.encode(value)))
-  else await store.remove(key)
-  await stronghold.save()
-}
-
-async function secretExists(key: string): Promise<boolean> {
-  return Boolean(await readSecret(key))
+async function migrateLegacySecrets(): Promise<SecretStoreStatus> {
+  const status = await call<SecretStoreStatus>('secrets_status')
+  if (status.migration !== 'pending') return status
+  const { migrateLegacySecrets: migrate } = await import('./legacy-secret-migration')
+  return migrate((input) => call('secrets_import_legacy', { input }))
 }
 
 function createTauriBridge(): NudgeBridge {
   return {
+    app: {
+      bootstrap: async () => {
+        const status = await call<SecretStoreStatus>('secrets_status')
+        if (status.migration === 'pending') {
+          try {
+            await migrateLegacySecrets()
+          } catch {
+            // The old vault remains untouched; settings surfaces the pending state.
+          }
+        }
+        return call('app_bootstrap')
+      }
+    },
     tasks: {
       list: () => call('tasks_list'),
       create: (input) => call('tasks_create', { input }),
@@ -138,6 +126,7 @@ function createTauriBridge(): NudgeBridge {
     focus: {
       getState: () => call('focus_get_state'),
       getStats: () => call('focus_get_stats'),
+      history: (query) => call('focus_history', { query }),
       start: ({ mode, taskId }) => call('focus_start', { mode, taskId: taskId ?? null }),
       pause: () => call('focus_pause'),
       resume: () => call('focus_resume'),
@@ -152,15 +141,12 @@ function createTauriBridge(): NudgeBridge {
     learning: {
       get: (taskId) => call('learning_get', { taskId }),
       ensure: (taskId) => call('learning_ensure', { taskId }),
-      generate: async (taskId, input = {}) => {
-        const apiKey = await readSecret(SECRET_API_KEY)
-        return call('learning_generate', {
+      generate: (taskId, input = {}) =>
+        call('learning_generate', {
           taskId,
           sections: input.sections ?? null,
-          includeNotes: input.includeNotes ?? false,
-          apiKey: apiKey || null
-        })
-      },
+          includeNotes: input.includeNotes ?? false
+        }),
       cancel: (taskId) => call('learning_cancel', { taskId }),
       resources: {
         create: (taskId, input) => call('learning_resource_create', { taskId, input }),
@@ -181,74 +167,25 @@ function createTauriBridge(): NudgeBridge {
       onProgress: (callback) => subscribe('learning-progress', callback)
     },
     recommendation: {
-      getSettings: async () =>
-        call('recommendation_get_settings', { hasApiKey: await secretExists(SECRET_API_KEY) }),
-      updateSettings: async (input) => {
-        if (input.clearApiKey) await writeSecret(SECRET_API_KEY, '')
-        if (input.apiKey !== undefined) await writeSecret(SECRET_API_KEY, input.apiKey.trim())
-        const sanitized = { ...input }
-        delete sanitized.apiKey
-        delete sanitized.clearApiKey
-        return call('recommendation_update_settings', {
-          input: sanitized,
-          hasApiKey: await secretExists(SECRET_API_KEY)
-        })
-      },
-      testConnection: async (input) => {
-        const apiKey = input?.apiKey?.trim() || (await readSecret(SECRET_API_KEY))
-        const sanitized = input ? { ...input } : undefined
-        if (sanitized) {
-          delete sanitized.apiKey
-          delete sanitized.clearApiKey
-        }
-        return call('recommendation_test_connection', {
-          input: sanitized ?? null,
-          apiKey: apiKey || null
-        })
-      }
+      getSettings: () => call('recommendation_get_settings'),
+      updateSettings: (input) => call('recommendation_update_settings', { input }),
+      testConnection: (input) => call('recommendation_test_connection', { input: input ?? null })
     },
     sync: {
-      configure: async (input) => {
-        const settings = await call<SyncSettings>('sync_configure', { input })
-        await writeSecret(SECRET_WEBDAV_PASSWORD, input.password)
-        sessionSyncPassphrase = input.passphrase
-        await writeSecret(
-          SECRET_SYNC_PASSPHRASE,
-          input.rememberPassphrase ? input.passphrase : ''
-        )
-        return settings
-      },
-      test: async (input) => {
-        const configuration = input ?? {
-          ...(await call<SyncSettings>('sync_get_settings', { hasCredentials: true })),
-          password: await readSecret(SECRET_WEBDAV_PASSWORD),
-          passphrase: sessionSyncPassphrase || (await readSecret(SECRET_SYNC_PASSPHRASE))
-        }
-        return call('sync_test', { input: configuration })
-      },
-      run: async () => {
-        const password = await readSecret(SECRET_WEBDAV_PASSWORD)
-        const passphrase = sessionSyncPassphrase || (await readSecret(SECRET_SYNC_PASSPHRASE))
-        if (!password) throw new Error('WebDAV 密码未保存，请重新配置同步')
-        if (!passphrase) throw new Error('请输入同步口令后再同步')
-        return call('sync_run', { password, passphrase })
-      },
-      disconnect: async () => {
-        await Promise.all([
-          writeSecret(SECRET_WEBDAV_PASSWORD, ''),
-          writeSecret(SECRET_SYNC_PASSPHRASE, '')
-        ])
-        sessionSyncPassphrase = ''
-        await call('sync_disconnect')
-      },
-      getSettings: async () =>
-        call('sync_get_settings', {
-          hasCredentials: await secretExists(SECRET_WEBDAV_PASSWORD)
-        }),
+      configure: (input) => call('sync_configure', { input }),
+      test: (input) => call('sync_test', { input: input ?? null }),
+      run: () => call('sync_run'),
+      disconnect: () => call('sync_disconnect'),
+      getSettings: () => call('sync_get_settings'),
+      confirmUpgrade: () => call('sync_confirm_upgrade'),
       getState: () => call('sync_get_state'),
       listConflicts: () => call('sync_list_conflicts'),
       resolveConflict: (id, choice) => call('sync_resolve_conflict', { id, choice }),
       onStateChanged: (callback) => subscribe('sync-state-changed', callback)
+    },
+    secrets: {
+      status: () => call('secrets_status'),
+      migrateLegacy: migrateLegacySecrets
     },
     backup: {
       exportJson: async () => {
@@ -269,6 +206,9 @@ function createTauriBridge(): NudgeBridge {
         if (!path || Array.isArray(path)) return { canceled: true }
         return call('backup_import', { path, mode })
       }
+    },
+    media: {
+      thumbnailDataUrl: (source) => call('media_thumbnail_data_url', { source })
     },
     desktop: {
       toggleMiniWindow: () => call('desktop_toggle_mini_window'),
@@ -341,7 +281,8 @@ let demoRecommendation: RecommendationSettings = {
 }
 let demoSyncSettings: SyncSettings = {
   enabled: false, serverUrl: '', username: '', remotePath: 'Nudge/nudge-v2.enc',
-  rememberPassphrase: false, hasCredentials: false, deviceId: 'demo-device', deviceName: '演示设备'
+  rememberPassphrase: false, syncV3Confirmed: true, hasCredentials: false,
+  deviceId: 'demo-device', deviceName: '演示设备'
 }
 let demoSyncState: SyncState = {
   status: 'disconnected', lastSyncedAt: null, lastError: null,
@@ -351,6 +292,12 @@ const focusListeners = new Set<(state: FocusState) => void>()
 const learningListeners = new Set<(progress: LearningProgressEvent) => void>()
 const syncListeners = new Set<(state: SyncState) => void>()
 const demoPacks = new Map<string, LearningPack>()
+const demoSecretStatus: SecretStoreStatus = {
+  available: true,
+  backend: 'demo-system-keyring',
+  migration: 'not-needed',
+  detail: null
+}
 
 function clone<T>(value: T): T { return structuredClone(value) }
 function findTask(id: string): Task {
@@ -404,7 +351,31 @@ function ensureDemoPack(taskId: string): LearningPack {
 
 function createDemoBridge(): NudgeBridge {
   const refreshPack = (taskId: string): LearningPack => clone(demoPacks.get(taskId) ?? ensureDemoPack(taskId))
+  const focusStats = (): FocusStats => ({
+    todaySeconds: 5400,
+    totalSeconds: 7200,
+    streakDays: 1,
+    dailyGoalMinutes: demoSettings.dailyGoalMinutes,
+    longTermGoalHours: demoSettings.longTermGoalHours,
+    longTermGoalLabel: demoSettings.longTermGoalLabel,
+    sessions: []
+  })
   return {
+    app: {
+      bootstrap: async (): Promise<BootstrapSnapshot> => ({
+        tasks: clone(demoTasks.filter((task) => task.status !== 'deleted')),
+        lists: clone(demoLists),
+        tags: clone(demoTags),
+        settings: clone(demoSettings),
+        focusState: clone(demoFocus),
+        focusStats: focusStats(),
+        recommendationSettings: clone(demoRecommendation),
+        syncSettings: clone(demoSyncSettings),
+        syncState: clone(demoSyncState),
+        syncConflicts: [],
+        secretStore: clone(demoSecretStatus)
+      })
+    },
     tasks: {
       list: async () => clone(demoTasks.filter((task) => task.status !== 'deleted')),
       create: async (input: CreateTaskInput) => {
@@ -417,17 +388,17 @@ function createDemoBridge(): NudgeBridge {
           tags: (input.tagNames ?? []).map((name, index) => ({ id: crypto.randomUUID(), name, color: [ACCENT, '#247a48', '#5d658c'][index % 3] })), subtasks: []
         }
         if (task.parentId) findTask(task.parentId).subtasks.push(task); else demoTasks.push(task)
-        return clone(task)
+        return { task: clone(task), changes: { upsertedTasks: [clone(task)], removedTaskIds: [], upsertedTags: clone(task.tags) } }
       },
       update: async (id: string, input: UpdateTaskInput) => {
         const task = findTask(id); Object.assign(task, input, { updatedAt: new Date().toISOString() })
         if (input.tagNames) task.tags = input.tagNames.map((name) => ({ id: crypto.randomUUID(), name, color: ACCENT }))
-        return clone(task)
+        return { task: clone(task), changes: { upsertedTasks: [clone(task)], removedTaskIds: [], upsertedTags: clone(task.tags) } }
       },
-      complete: async (id, completed) => { const task = findTask(id); task.status = completed ? 'completed' : 'open'; task.completedAt = completed ? new Date().toISOString() : null; return clone(task) },
-      delete: async (id) => { const task = findTask(id); task.status = 'deleted'; task.deletedAt = new Date().toISOString() },
-      restore: async (id) => { const task = findTask(id); task.status = 'open'; task.deletedAt = null; return clone(task) },
-      reorder: async (ids) => { const positions = new Map(ids.map((id, index) => [id, index])); demoTasks.sort((a, b) => (positions.get(a.id) ?? 999) - (positions.get(b.id) ?? 999)) }
+      complete: async (id, completed) => { const task = findTask(id); task.status = completed ? 'completed' : 'open'; task.completedAt = completed ? new Date().toISOString() : null; return { task: clone(task), changes: { upsertedTasks: [clone(task)], removedTaskIds: [], upsertedTags: clone(task.tags) } } },
+      delete: async (id) => { const task = findTask(id); task.status = 'deleted'; task.deletedAt = new Date().toISOString(); return { task: null, changes: { upsertedTasks: [], removedTaskIds: [id], upsertedTags: [] } } },
+      restore: async (id) => { const task = findTask(id); task.status = 'open'; task.deletedAt = null; return { task: clone(task), changes: { upsertedTasks: [clone(task)], removedTaskIds: [], upsertedTags: clone(task.tags) } } },
+      reorder: async (ids) => { const positions = new Map(ids.map((id, index) => [id, index])); demoTasks.sort((a, b) => (positions.get(a.id) ?? 999) - (positions.get(b.id) ?? 999)); return ids.map((id, index) => ({ id, position: (index + 1) * 1000 })) }
     },
     lists: {
       list: async () => clone(demoLists),
@@ -438,7 +409,8 @@ function createDemoBridge(): NudgeBridge {
     tags: { list: async () => clone(demoTags) },
     focus: {
       getState: async () => clone(demoFocus),
-      getStats: async (): Promise<FocusStats> => ({ todaySeconds: 5400, totalSeconds: 7200, streakDays: 1, dailyGoalMinutes: demoSettings.dailyGoalMinutes, longTermGoalHours: demoSettings.longTermGoalHours, longTermGoalLabel: demoSettings.longTermGoalLabel, sessions: [] as FocusSession[] }),
+      getStats: async (): Promise<FocusStats> => focusStats(),
+      history: async (): Promise<FocusHistoryPage> => ({ items: [] as FocusSession[], nextCursor: null, total: 0 }),
       start: async ({ mode, taskId }) => { demoFocus = { status: 'running', mode, phase: 'focus', taskId: taskId ?? null, startedAt: new Date().toISOString(), accumulatedSeconds: 0, durationSeconds: mode === 'pomodoro' ? demoSettings.pomodoroFocusMinutes * 60 : null }; emitFocus(); return clone(demoFocus) },
       pause: async () => { demoFocus.status = 'paused'; demoFocus.startedAt = null; emitFocus(); return clone(demoFocus) },
       resume: async () => { demoFocus.status = 'running'; demoFocus.startedAt = new Date().toISOString(); emitFocus(); return clone(demoFocus) },
@@ -489,11 +461,18 @@ function createDemoBridge(): NudgeBridge {
       test: async () => ({ ok: true, message: '演示 WebDAV 连接成功。' }),
       run: async () => { demoSyncState = { ...demoSyncState, status: 'syncing' }; emitSync(); await new Promise((resolve) => setTimeout(resolve, 500)); demoSyncState = { ...demoSyncState, status: 'idle', lastSyncedAt: new Date().toISOString(), pendingChanges: 0 }; emitSync(); return clone(demoSyncState) },
       disconnect: async () => { demoSyncSettings.enabled = false; demoSyncState = { ...demoSyncState, status: 'disconnected' }; emitSync() },
-      getSettings: async () => clone(demoSyncSettings), getState: async () => clone(demoSyncState),
+      getSettings: async () => clone(demoSyncSettings),
+      confirmUpgrade: async () => { demoSyncSettings.syncV3Confirmed = true; return clone(demoSyncSettings) },
+      getState: async () => clone(demoSyncState),
       listConflicts: async () => [] as SyncConflict[], resolveConflict: async () => undefined,
       onStateChanged: (callback) => { syncListeners.add(callback); return () => syncListeners.delete(callback) }
     },
+    secrets: {
+      status: async () => clone(demoSecretStatus),
+      migrateLegacy: async () => clone(demoSecretStatus)
+    },
     backup: { exportJson: async () => ({ canceled: false, path: 'nudge-v2-demo-backup.json' }), importJson: async () => ({ canceled: false, imported: demoTasks.length }) },
+    media: { thumbnailDataUrl: async () => '' },
     desktop: { toggleMiniWindow: async () => undefined, showMainWindow: async () => undefined, openExternal: async (url) => { window.open(url, '_blank', 'noopener,noreferrer') }, minimize: async () => undefined, toggleMaximize: async () => undefined, close: async () => undefined, platform: async () => 'unknown', prepareNotifications: async () => true, onQuickAdd: () => () => undefined }
   }
 }

@@ -8,6 +8,7 @@ import type {
   LearningProgressEvent,
   LearningSection,
   RecommendationSettings,
+  SecretStoreStatus,
   SyncConflict,
   SyncSettings,
   SyncState,
@@ -19,7 +20,7 @@ import type {
 } from '@shared/types'
 import { api } from './bridge'
 
-type DrawerMode = 'task' | 'settings' | null
+type DrawerMode = 'task' | 'settings' | 'focus-history' | null
 
 interface NudgeStore {
   initialized: boolean
@@ -38,6 +39,7 @@ interface NudgeStore {
   syncSettings: SyncSettings | null
   syncState: SyncState | null
   syncConflicts: SyncConflict[]
+  secretStore: SecretStoreStatus | null
   currentView: ViewId
   search: string
   selectedTaskId: string | null
@@ -51,6 +53,7 @@ interface NudgeStore {
   setSearch: (search: string) => void
   selectTask: (taskId: string | null) => void
   openSettings: () => void
+  openFocusHistory: () => void
   closeDrawer: () => void
   setCommandOpen: (open: boolean) => void
   createTask: (input: CreateTaskInput) => Promise<Task>
@@ -86,6 +89,43 @@ let automaticSyncTimer: ReturnType<typeof setTimeout> | null = null
 let syncRunPromise: Promise<SyncState> | null = null
 let syncLifecycleInstalled = false
 
+function removeTaskFromTree(tasks: Task[], id: string): Task[] {
+  return tasks
+    .filter((task) => task.id !== id)
+    .map((task) => ({ ...task, subtasks: removeTaskFromTree(task.subtasks, id) }))
+}
+
+function insertTaskIntoTree(tasks: Task[], task: Task): Task[] {
+  const withoutTask = removeTaskFromTree(tasks, task.id)
+  if (!task.parentId) return [...withoutTask, task].sort((a, b) => a.position - b.position)
+
+  let inserted = false
+  const visit = (items: Task[]): Task[] => items.map((item) => {
+    if (item.id === task.parentId) {
+      inserted = true
+      return {
+        ...item,
+        subtasks: [...removeTaskFromTree(item.subtasks, task.id), task].sort((a, b) => a.position - b.position)
+      }
+    }
+    return { ...item, subtasks: visit(item.subtasks) }
+  })
+  const next = visit(withoutTask)
+  return inserted ? next : withoutTask
+}
+
+function patchTaskTree(tasks: Task[], id: string, patch: Partial<Task>): Task[] {
+  return tasks.map((task) => task.id === id
+    ? { ...task, ...patch }
+    : { ...task, subtasks: patchTaskTree(task.subtasks, id, patch) })
+}
+
+function mergeTaskTags(tags: Tag[], task: Task): Tag[] {
+  const byId = new Map(tags.map((tag) => [tag.id, tag]))
+  task.tags.forEach((tag) => byId.set(tag.id, tag))
+  return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, 'zh-CN'))
+}
+
 function scheduleAutomaticSync(delay = 5_000): void {
   if (automaticSyncTimer) clearTimeout(automaticSyncTimer)
   automaticSyncTimer = setTimeout(() => {
@@ -95,6 +135,7 @@ function scheduleAutomaticSync(delay = 5_000): void {
       !state.initialized ||
       !state.syncSettings?.enabled ||
       !state.syncSettings.rememberPassphrase ||
+      !state.syncSettings.syncV3Confirmed ||
       state.syncState?.status === 'syncing'
     ) return
     void state.runSync().catch(() => undefined)
@@ -128,6 +169,7 @@ export const useNudgeStore = create<NudgeStore>((set, get) => ({
   syncSettings: null,
   syncState: null,
   syncConflicts: [],
+  secretStore: null,
   currentView: 'today',
   search: '',
   selectedTaskId: null,
@@ -138,18 +180,7 @@ export const useNudgeStore = create<NudgeStore>((set, get) => ({
     if (get().initialized || get().loading) return
     set({ loading: true, error: null })
     try {
-      const [tasks, lists, tags, settings, focusState, focusStats, recommendationSettings, syncSettings, syncState, syncConflicts] = await Promise.all([
-        api.tasks.list(),
-        api.lists.list(),
-        api.tags.list(),
-        api.settings.get(),
-        api.focus.getState(),
-        api.focus.getStats(),
-        api.recommendation.getSettings(),
-        api.sync.getSettings(),
-        api.sync.getState(),
-        api.sync.listConflicts()
-      ])
+      const snapshot = await api.app.bootstrap()
       focusUnsubscribe?.()
       focusUnsubscribe = api.focus.onChange((state) => {
         set({ focusState: state })
@@ -179,19 +210,10 @@ export const useNudgeStore = create<NudgeStore>((set, get) => ({
         initialized: true,
         loading: false,
         error: null,
-        tasks,
-        lists,
-        tags,
-        settings,
-        focusState,
-        focusStats,
-        recommendationSettings,
-        syncSettings,
-        syncState,
-        syncConflicts
+        ...snapshot
       })
       installSyncLifecycle()
-      if (syncSettings.enabled && syncSettings.rememberPassphrase) scheduleAutomaticSync(750)
+      if (snapshot.syncSettings.enabled && snapshot.syncSettings.rememberPassphrase) scheduleAutomaticSync(750)
       void api.desktop.platform().then((platform) => {
         if (platform === 'android' || platform === 'ios') {
           void api.desktop.prepareNotifications().catch(() => false)
@@ -209,20 +231,16 @@ export const useNudgeStore = create<NudgeStore>((set, get) => ({
     if (get().initialized || get().loading) return
     set({ loading: true, error: null })
     try {
-      const [tasks, settings, focusState] = await Promise.all([
-        api.tasks.list(),
-        api.settings.get(),
-        api.focus.getState()
-      ])
+      const snapshot = await api.app.bootstrap()
       focusUnsubscribe?.()
       focusUnsubscribe = api.focus.onChange((state) => set({ focusState: state }))
       set({
         initialized: true,
         loading: false,
         error: null,
-        tasks,
-        settings,
-        focusState
+        tasks: snapshot.tasks,
+        settings: snapshot.settings,
+        focusState: snapshot.focusState
       })
     } catch (error) {
       set({
@@ -246,67 +264,127 @@ export const useNudgeStore = create<NudgeStore>((set, get) => ({
   selectTask: (selectedTaskId) =>
     set({ selectedTaskId, drawerMode: selectedTaskId ? 'task' : null, openLearningTaskId: null }),
   openSettings: () => set({ drawerMode: 'settings', selectedTaskId: null, openLearningTaskId: null }),
+  openFocusHistory: () => set({ drawerMode: 'focus-history', selectedTaskId: null, openLearningTaskId: null }),
   closeDrawer: () => set({ drawerMode: null, selectedTaskId: null }),
   setCommandOpen: (commandOpen) => set({ commandOpen }),
 
   createTask: async (input) => {
-    const task = await api.tasks.create(input)
-    await get().refreshTasks()
+    const result = await api.tasks.create(input)
+    const task = result.task
+    if (!task) throw new Error('新任务没有返回有效内容')
+    set((state) => ({
+      tasks: insertTaskIntoTree(state.tasks, task),
+      tags: mergeTaskTags(state.tags, task)
+    }))
     set({ selectedTaskId: task.parentId ? get().selectedTaskId : task.id, drawerMode: 'task' })
     return task
   },
 
   updateTask: async (id, input) => {
-    const task = await api.tasks.update(id, input)
-    await get().refreshTasks()
-    return task
+    const snapshot = get().tasks
+    const optimistic: Partial<Task> = {
+      ...input,
+      updatedAt: new Date().toISOString()
+    }
+    delete (optimistic as Partial<Task> & { tagNames?: string[] }).tagNames
+    set({ tasks: patchTaskTree(snapshot, id, optimistic) })
+    try {
+      const result = await api.tasks.update(id, input)
+      const task = result.task
+      if (!task) throw new Error('任务更新没有返回有效内容')
+      set((state) => ({
+        tasks: insertTaskIntoTree(state.tasks, task),
+        tags: mergeTaskTags(state.tags, task)
+      }))
+      return task
+    } catch (error) {
+      set({ tasks: snapshot })
+      throw error
+    }
   },
 
   completeTask: async (id, completed) => {
-    const task = await api.tasks.complete(id, completed)
-    await get().refreshTasks()
-    return task
+    const snapshot = get().tasks
+    set({
+      tasks: patchTaskTree(snapshot, id, {
+        status: completed ? 'completed' : 'open',
+        completedAt: completed ? new Date().toISOString() : null,
+        updatedAt: new Date().toISOString()
+      })
+    })
+    try {
+      const result = await api.tasks.complete(id, completed)
+      const task = result.task
+      if (!task) throw new Error('任务状态没有返回有效内容')
+      set((state) => ({ tasks: insertTaskIntoTree(state.tasks, task) }))
+      return task
+    } catch (error) {
+      set({ tasks: snapshot })
+      throw error
+    }
   },
 
   deleteTask: async (id) => {
-    await api.tasks.delete(id)
-    await get().refreshTasks()
-    if (get().selectedTaskId === id) set({ selectedTaskId: null, drawerMode: null })
+    const snapshot = get().tasks
+    set({ tasks: removeTaskFromTree(snapshot, id) })
+    try {
+      await api.tasks.delete(id)
+      if (get().selectedTaskId === id) set({ selectedTaskId: null, drawerMode: null })
+    } catch (error) {
+      set({ tasks: snapshot })
+      throw error
+    }
   },
 
   restoreTask: async (id) => {
-    const task = await api.tasks.restore(id)
-    await get().refreshTasks()
+    const result = await api.tasks.restore(id)
+    const task = result.task
+    if (!task) throw new Error('恢复任务没有返回有效内容')
+    set((state) => ({ tasks: insertTaskIntoTree(state.tasks, task) }))
     return task
   },
 
   reorderTasks: async (ids) => {
+    const snapshot = get().tasks
     const position = new Map(ids.map((id, index) => [id, index]))
     set({
       tasks: [...get().tasks].sort(
         (a, b) => (position.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (position.get(b.id) ?? Number.MAX_SAFE_INTEGER)
       )
     })
-    await api.tasks.reorder(ids)
-    await get().refreshTasks()
+    try {
+      await api.tasks.reorder(ids)
+    } catch (error) {
+      set({ tasks: snapshot })
+      throw error
+    }
   },
 
   createList: async (name) => {
     const list = await api.lists.create(name)
-    set({ lists: await api.lists.list(), currentView: `list:${list.id}` })
+    set((state) => ({ lists: [...state.lists, list].sort((a, b) => a.position - b.position), currentView: `list:${list.id}` }))
     return list
   },
 
   updateList: async (id, input) => {
     const list = await api.lists.update(id, input)
-    set({ lists: await api.lists.list() })
+    set((state) => ({ lists: state.lists.map((item) => item.id === id ? list : item) }))
     return list
   },
 
   deleteList: async (id) => {
-    await api.lists.delete(id)
-    set({ lists: await api.lists.list(), currentView: 'inbox' })
-    await get().refreshTasks()
+    const snapshot = get()
+    set({
+      lists: snapshot.lists.filter((list) => list.id !== id),
+      tasks: snapshot.tasks.map((task) => task.listId === id ? { ...task, listId: 'inbox' } : task),
+      currentView: 'inbox'
+    })
+    try {
+      await api.lists.delete(id)
+    } catch (error) {
+      set({ lists: snapshot.lists, tasks: snapshot.tasks, currentView: snapshot.currentView })
+      throw error
+    }
   },
 
   startFocus: async (mode, taskId = null) => {
@@ -371,6 +449,14 @@ export const useNudgeStore = create<NudgeStore>((set, get) => ({
   },
 
   runSync: async () => {
+    const currentSettings = get().syncSettings
+    if (currentSettings?.enabled && !currentSettings.syncV3Confirmed) {
+      const confirmed = window.confirm(
+        'Nudge v2.1 将把远端同步文件升级为 schema 3。连接同一远端文件的其他设备也需要升级到 v2.1；继续后 v2.0 将停止同步。是否继续？'
+      )
+      if (!confirmed) throw new Error('已取消同步格式升级')
+      set({ syncSettings: await api.sync.confirmUpgrade() })
+    }
     if (!syncRunPromise) {
       syncRunPromise = api.sync.run().then(async (syncState) => {
         set({ syncState, syncConflicts: await api.sync.listConflicts() })

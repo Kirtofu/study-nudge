@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import {
   DndContext,
   KeyboardSensor,
@@ -27,13 +27,17 @@ import {
   GripVertical,
   ListChecks,
   Play,
+  Plus,
+  Upload,
   Tag as TagIcon
 } from 'lucide-react'
 import type { Priority, Task } from '@shared/types'
+import { api } from '../bridge'
 import { useNudgeStore } from '../store'
 import { filterTasks, formatClock, groupLabel } from '../utils'
 import { useToast } from './Toast'
-import { LearningPackInline } from './LearningPackWorkspace'
+
+const LearningPackInline = lazy(() => import('./LearningPackWorkspace').then((module) => ({ default: module.LearningPackInline })))
 
 const GROUPS = ['上午', '下午', '晚间', '随时'] as const
 
@@ -199,7 +203,11 @@ function SortableTaskRow({ task }: { task: Task }): React.JSX.Element {
       {currentView === 'completed' ? <CheckCircle2 className="completed-stamp" size={17} aria-hidden="true" /> : null}
       </article>
       <AnimatePresence initial={false}>
-        <LearningPackInline task={task} />
+        {openLearningTaskId === task.id ? (
+          <Suspense fallback={<div className="learning-loading" role="status">正在打开学习包</div>}>
+            <LearningPackInline task={task} />
+          </Suspense>
+        ) : null}
       </AnimatePresence>
     </motion.div>
   )
@@ -210,6 +218,9 @@ export function TaskList(): React.JSX.Element {
   const currentView = useNudgeStore((state) => state.currentView)
   const search = useNudgeStore((state) => state.search)
   const reorderTasks = useNudgeStore((state) => state.reorderTasks)
+  const refreshTasks = useNudgeStore((state) => state.refreshTasks)
+  const refreshStats = useNudgeStore((state) => state.refreshStats)
+  const showToast = useToast()
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -239,13 +250,30 @@ export function TaskList(): React.JSX.Element {
   }
 
   if (!visibleTasks.length) {
+    const firstRun = !tasks.length && !search
     return (
       <section className="empty-state" aria-live="polite">
         <span className="empty-state-icon" aria-hidden="true">
           {currentView === 'completed' ? <CheckCircle2 size={28} /> : <ListChecks size={28} />}
         </span>
-        <h2>{search ? '没有找到匹配的任务' : currentView === 'completed' ? '还没有完成记录' : '这里暂时很清爽'}</h2>
-        <p>{search ? '换一个关键词试试。' : '在上方写下一件要做的事，按 Enter 就能添加。'}</p>
+        <h2>{search ? '没有找到匹配的任务' : currentView === 'completed' ? '还没有完成记录' : firstRun ? '从一件具体的小事开始' : '这里暂时很清爽'}</h2>
+        <p>{search ? '换一个关键词试试。' : firstRun ? '新建第一项，或把以前的 Nudge 备份带进来。' : '在上方写下一件要做的事，按 Enter 就能添加。'}</p>
+        {firstRun ? (
+          <div className="empty-state-actions">
+            <button type="button" className="primary-button" onClick={() => document.getElementById('quick-add-input')?.focus()}>
+              <Plus size={15} aria-hidden="true" />新建任务
+            </button>
+            <button type="button" className="secondary-button" onClick={() => {
+              void api.backup.importJson('merge').then(async (result) => {
+                if (result.canceled) return
+                await Promise.all([refreshTasks(), refreshStats()])
+                showToast({ message: '备份已经导入', detail: `处理了 ${result.imported ?? 0} 条记录` })
+              }).catch((error) => showToast({ message: '备份没有导入成功', detail: error instanceof Error ? error.message : '请检查文件格式' }))
+            }}>
+              <Upload size={15} aria-hidden="true" />导入备份
+            </button>
+          </div>
+        ) : null}
       </section>
     )
   }

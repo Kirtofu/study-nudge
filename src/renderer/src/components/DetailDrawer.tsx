@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Bell,
   CalendarDays,
@@ -28,6 +28,50 @@ const PRIORITIES: Array<{ id: Priority; label: string }> = [
   { id: 'high', label: '高' }
 ]
 
+type SaveWaiter = {
+  resolve: (task: Task) => void
+  reject: (error: unknown) => void
+}
+
+type TaskSaveQueue = {
+  running: boolean
+  pending: { input: UpdateTaskInput; waiters: SaveWaiter[] } | null
+}
+
+const taskSaveQueues = new Map<string, TaskSaveQueue>()
+
+function enqueueTaskSave(taskId: string, input: UpdateTaskInput): Promise<Task> {
+  const queue = taskSaveQueues.get(taskId) ?? { running: false, pending: null }
+  taskSaveQueues.set(taskId, queue)
+  const promise = new Promise<Task>((resolve, reject) => {
+    if (queue.pending) {
+      queue.pending.input = { ...queue.pending.input, ...input }
+      queue.pending.waiters.push({ resolve, reject })
+    } else {
+      queue.pending = { input, waiters: [{ resolve, reject }] }
+    }
+  })
+
+  const drain = async (): Promise<void> => {
+    if (queue.running) return
+    queue.running = true
+    while (queue.pending) {
+      const pending = queue.pending
+      queue.pending = null
+      try {
+        const updated = await useNudgeStore.getState().updateTask(taskId, pending.input)
+        pending.waiters.forEach((waiter) => waiter.resolve(updated))
+      } catch (error) {
+        pending.waiters.forEach((waiter) => waiter.reject(error))
+      }
+    }
+    queue.running = false
+    taskSaveQueues.delete(taskId)
+  }
+  void drain()
+  return promise
+}
+
 function toLocalDateTime(iso: string | null): string {
   if (!iso) return ''
   const date = new Date(iso)
@@ -44,7 +88,6 @@ export function DetailDrawer(): React.JSX.Element | null {
   const lists = useNudgeStore((state) => state.lists)
   const selectedTaskId = useNudgeStore((state) => state.selectedTaskId)
   const closeDrawer = useNudgeStore((state) => state.closeDrawer)
-  const updateTask = useNudgeStore((state) => state.updateTask)
   const createTask = useNudgeStore((state) => state.createTask)
   const completeTask = useNudgeStore((state) => state.completeTask)
   const deleteTask = useNudgeStore((state) => state.deleteTask)
@@ -55,6 +98,8 @@ export function DetailDrawer(): React.JSX.Element | null {
   const [subtaskTitle, setSubtaskTitle] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const saveVersion = useRef(0)
+  const activeTaskId = useRef<string | null>(null)
   const showToast = useToast()
 
   const task = useMemo(
@@ -63,24 +108,30 @@ export function DetailDrawer(): React.JSX.Element | null {
   )
 
   useEffect(() => {
-    setDraft(task)
-    setTagText(task?.tags.map((tag) => tag.name).join(', ') ?? '')
+    if (activeTaskId.current !== task?.id) {
+      activeTaskId.current = task?.id ?? null
+      setDraft(task)
+      setTagText(task?.tags.map((tag) => tag.name).join(', ') ?? '')
+    }
   }, [task])
 
   if (!task || !draft) return null
 
   const save = async (input: UpdateTaskInput): Promise<void> => {
+    const version = ++saveVersion.current
     setSaving(true)
     setSaved(false)
     try {
-      const updated = await updateTask(task.id, input)
-      setDraft(updated)
-      setSaved(true)
-      window.setTimeout(() => setSaved(false), 1300)
+      const updated = await enqueueTaskSave(task.id, input)
+      if (version === saveVersion.current) {
+        setDraft(updated)
+        setSaved(true)
+        window.setTimeout(() => setSaved(false), 1300)
+      }
     } catch (error) {
       showToast({ message: '更改没有保存', detail: error instanceof Error ? error.message : '请稍后重试' })
     } finally {
-      setSaving(false)
+      if (version === saveVersion.current) setSaving(false)
     }
   }
 

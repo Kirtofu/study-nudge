@@ -80,6 +80,7 @@ pub async fn test_connection(
         bail!("请先允许联网推荐");
     }
     validate_endpoint(&settings.provider, &settings.endpoint)?;
+    validate_resolved_endpoint(&settings.provider, &settings.endpoint).await?;
     let client = secure_client()?;
     let response = if settings.provider == "ollama" {
         client
@@ -125,6 +126,7 @@ pub async fn generate_section(
         bail!("联网推荐尚未启用");
     }
     validate_endpoint(&settings.provider, &settings.endpoint)?;
+    validate_resolved_endpoint(&settings.provider, &settings.endpoint).await?;
     if !matches!(section, "resources" | "videos" | "roadmap") {
         bail!("学习包分栏无效");
     }
@@ -392,8 +394,28 @@ fn secure_client() -> Result<Client> {
     Ok(Client::builder()
         .connect_timeout(std::time::Duration::from_secs(12))
         .timeout(std::time::Duration::from_secs(60))
-        .redirect(reqwest::redirect::Policy::limited(3))
-        .user_agent("Nudge/2.0 learning-planner")
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 3 {
+                return attempt.error("推荐服务重定向次数过多");
+            }
+            let Some(previous) = attempt.previous().last() else {
+                return attempt.follow();
+            };
+            let next = attempt.url();
+            let same_origin = previous.scheme() == next.scheme()
+                && previous.host_str() == next.host_str()
+                && previous.port_or_known_default() == next.port_or_known_default();
+            let local_http = next.scheme() == "http"
+                && next
+                    .host_str()
+                    .is_some_and(|host| matches!(host, "localhost" | "127.0.0.1" | "::1"));
+            if same_origin && (next.scheme() == "https" || local_http) {
+                attempt.follow()
+            } else {
+                attempt.error("推荐服务拒绝跨域或降级重定向")
+            }
+        }))
+        .user_agent("Nudge/2.1 learning-planner")
         .build()?)
 }
 
@@ -456,7 +478,7 @@ fn metadata_client() -> Result<Client> {
         .connect_timeout(std::time::Duration::from_secs(8))
         .timeout(std::time::Duration::from_secs(15))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent("Nudge/2.0 video-metadata")
+        .user_agent("Nudge/2.1 video-metadata")
         .build()?)
 }
 
@@ -606,9 +628,34 @@ fn is_private_host_literal(host: &str) -> bool {
                     || value.is_broadcast()
                     || value.is_unspecified()
             }
-            std::net::IpAddr::V6(value) => value.is_loopback() || value.is_unspecified(),
+            std::net::IpAddr::V6(value) => {
+                value.is_loopback()
+                    || value.is_unspecified()
+                    || value.is_unique_local()
+                    || value.is_unicast_link_local()
+            }
         })
         .unwrap_or(false)
+}
+
+async fn validate_resolved_endpoint(provider: &str, endpoint: &str) -> Result<()> {
+    if provider == "ollama" {
+        return Ok(());
+    }
+    let parsed = Url::parse(endpoint).context("服务地址格式无效")?;
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| anyhow!("服务地址缺少主机名"))?;
+    let port = parsed.port_or_known_default().unwrap_or(443);
+    let addresses = tokio::net::lookup_host((host, port))
+        .await
+        .context("无法解析推荐服务地址")?;
+    for address in addresses {
+        if is_private_host_literal(&address.ip().to_string()) {
+            bail!("推荐服务解析到了私网或本机地址");
+        }
+    }
+    Ok(())
 }
 
 fn is_safe_resource_url(value: &str) -> bool {

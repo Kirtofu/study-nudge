@@ -1,20 +1,31 @@
-import { useEffect, useMemo } from 'react'
+import { lazy, Suspense, useEffect, useMemo } from 'react'
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { AnimatePresence, motion } from 'motion/react'
 import { AlertTriangle, RotateCcw, Search, TimerReset, X } from 'lucide-react'
-import { CommandPalette } from './components/CommandPalette'
 import { DetailDrawer } from './components/DetailDrawer'
 import { FocusDock, MiniFocus } from './components/FocusDock'
 import { QuickAdd } from './components/QuickAdd'
-import { SettingsDrawer } from './components/SettingsDrawer'
 import { Sidebar } from './components/Sidebar'
 import { TaskList } from './components/TaskList'
-import { LearningPackWorkspace } from './components/LearningPackWorkspace'
 import { MobileNav } from './components/MobileNav'
 import { TitleBar } from './components/TitleBar'
 import { ToastProvider } from './components/Toast'
 import { useNudgeStore } from './store'
 import { filterTasks, formatFriendlyDate } from './utils'
+
+const CommandPalette = lazy(() => import('./components/CommandPalette').then((module) => ({ default: module.CommandPalette })))
+const SettingsDrawer = lazy(() => import('./components/SettingsDrawer').then((module) => ({ default: module.SettingsDrawer })))
+const FocusHistoryDrawer = lazy(() => import('./components/FocusHistoryDrawer').then((module) => ({ default: module.FocusHistoryDrawer })))
+const LearningPackWorkspace = lazy(() => import('./components/LearningPackWorkspace').then((module) => ({ default: module.LearningPackWorkspace })))
+
+function DrawerSkeleton(): React.JSX.Element {
+  return (
+    <aside className="detail-drawer drawer-skeleton" aria-label="正在打开面板" aria-busy="true">
+      <div className="drawer-header"><span className="skeleton-line skeleton-short" /></div>
+      <div className="drawer-scroll"><span className="skeleton-line" /><span className="skeleton-line" /><span className="skeleton-line skeleton-short" /></div>
+    </aside>
+  )
+}
 
 function LoadingScreen(): React.JSX.Element {
   return (
@@ -118,7 +129,9 @@ function MainApp(): React.JSX.Element {
         <QuickAdd />
         {learningNeedsQuickAnchor && openLearningTaskId ? (
           <div className="quick-learning-anchor">
-            <LearningPackWorkspace taskId={openLearningTaskId} />
+            <Suspense fallback={<div className="learning-loading" role="status">正在打开学习包</div>}>
+              <LearningPackWorkspace taskId={openLearningTaskId} />
+            </Suspense>
           </div>
         ) : null}
         <div className="task-scroll-region">
@@ -137,11 +150,13 @@ function MainApp(): React.JSX.Element {
             exit={{ opacity: 0, x: 18 }}
             transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }}
           >
-            {drawerMode === 'task' ? <DetailDrawer /> : <SettingsDrawer />}
+            <Suspense fallback={<DrawerSkeleton />}>
+              {drawerMode === 'task' ? <DetailDrawer /> : drawerMode === 'settings' ? <SettingsDrawer /> : <FocusHistoryDrawer />}
+            </Suspense>
           </motion.div>
         ) : null}
       </AnimatePresence>
-      <CommandPalette />
+      <Suspense fallback={null}><CommandPalette /></Suspense>
       <MobileNav />
     </div>
   )

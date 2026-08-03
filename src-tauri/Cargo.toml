@@ -1,12 +1,12 @@
 [package]
 name = "nudge"
-version = "2.0.0"
+version = "2.1.0"
 description = "A warm, offline-first todo, focus, and learning planner"
 authors = ["Nudge contributors"]
 license = "MIT"
 repository = "https://github.com/Kirtofu/study-nudge"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -25,6 +25,8 @@ chacha20poly1305 = { version = "0.10", features = ["std"] }
 chrono = { version = "0.4", features = ["serde"] }
 hex = "0.4"
 hostname = "0.4"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+keyring-core = "1.0.0"
 log = "0.4"
 parking_lot = "0.12"
 rand = "0.8"
@@ -41,7 +43,7 @@ tauri-plugin-notification = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-stronghold = "2"
 thiserror = "2"
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio = { version = "1", features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 url = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 zeroize = "1"
@@ -50,3 +52,15 @@ zeroize = "1"
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-native-keyring-store = "1.1.0"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus-secret-service-keyring-store = { version = "1.0.0", features = ["crypto-rust"] }
+
+[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+apple-native-keyring-store = { version = "1.0.1", features = ["keychain", "protected"] }
+
+[target.'cfg(target_os = "android")'.dependencies]
+android-native-keyring-store = "1.0.0"

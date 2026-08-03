@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing or new release tag
         required: true
-        default: v2.0.0
+        default: v2.1.0-rc.1
       publish:
         description: Publish or update the GitHub release after all builds pass
         required: true
@@ -266,12 +266,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          release_notes="docs/release-notes-v2.0.0-beta.1.md"
+          version="${RELEASE_TAG#v}"
+          release_notes="docs/release-notes-${RELEASE_TAG}.md"
           release_flags=()
           if [[ "$RELEASE_TAG" == *-* ]]; then
             release_flags+=(--prerelease)
-          elif [[ -f docs/release-notes-v2.0.0.md ]]; then
-            release_notes="docs/release-notes-v2.0.0.md"
+          fi
+          if [[ ! -f "$release_notes" ]]; then
+            if [[ -f docs/release-notes-${version}.md ]]; then
+              release_notes="docs/release-notes-${version}.md"
+            elif [[ -f docs/release-notes-v${version%%-*}.md ]]; then
+              release_notes="docs/release-notes-v${version%%-*}.md"
+            else
+              release_notes="/tmp/nudge-release-notes.md"
+              gh release view "$RELEASE_TAG" --json body --jq .body > "$release_notes" 2>/dev/null || true
+              if [[ ! -s "$release_notes" ]]; then
+                printf 'Nudge %s\n\n构建产物与校验文件已上传。\n' "$RELEASE_TAG" > "$release_notes"
+              fi
+            fi
           fi
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" release-assets/* --clobber

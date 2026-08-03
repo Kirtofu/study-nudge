@@ -2,7 +2,7 @@ name: Quality
 
 on:
   push:
-    branches: [main, v2-learning-pack]
+    branches: [main, v2-learning-pack, v2.1-hardening]
   pull_request:
     branches: [main]
 
@@ -39,6 +39,18 @@ jobs:
       - name: Build web assets
         run: npm run build:web
 
+      - name: Enforce bundle budgets
+        run: npm run check:bundle
+
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Run responsive browser smoke tests
+        run: npm run test:e2e
+
   rust:
     name: Rust fmt, clippy and tests
     runs-on: ubuntu-22.04
@@ -69,3 +81,8 @@ jobs:
 
       - name: Run Rust tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Audit Rust dependencies
+        uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -104,6 +104,28 @@ pub struct UpdateTaskInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct EntityChangeSet {
+    pub upserted_tasks: Vec<Task>,
+    pub removed_task_ids: Vec<String>,
+    pub upserted_tags: Vec<Tag>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskMutationResult {
+    pub task: Option<Task>,
+    pub changes: EntityChangeSet,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaskOrderPatch {
+    pub id: String,
+    pub position: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct FocusSession {
     pub id: String,
     pub task_id: Option<String>,
@@ -152,6 +174,22 @@ pub struct FocusStats {
     pub long_term_goal_hours: f64,
     pub long_term_goal_label: String,
     pub sessions: Vec<FocusSession>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusHistoryQuery {
+    pub range: Option<String>,
+    pub cursor: Option<String>,
+    pub limit: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FocusHistoryPage {
+    pub items: Vec<FocusSession>,
+    pub next_cursor: Option<String>,
+    pub total: i64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -372,6 +410,8 @@ pub struct SyncSettings {
     pub username: String,
     pub remote_path: String,
     pub remember_passphrase: bool,
+    #[serde(default)]
+    pub sync_v3_confirmed: bool,
     pub has_credentials: bool,
     pub device_id: String,
     pub device_name: String,
@@ -437,6 +477,39 @@ pub struct SyncConflict {
 pub struct OperationResult {
     pub ok: bool,
     pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SecretStoreStatus {
+    pub available: bool,
+    pub backend: String,
+    pub migration: String,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LegacySecretsInput {
+    pub recommendation_api_key: Option<String>,
+    pub webdav_password: Option<String>,
+    pub sync_passphrase: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BootstrapSnapshot {
+    pub tasks: Vec<Task>,
+    pub lists: Vec<TaskList>,
+    pub tags: Vec<Tag>,
+    pub settings: AppSettings,
+    pub focus_state: FocusState,
+    pub focus_stats: FocusStats,
+    pub recommendation_settings: RecommendationSettings,
+    pub sync_settings: SyncSettings,
+    pub sync_state: SyncState,
+    pub sync_conflicts: Vec<SyncConflict>,
+    pub secret_store: SecretStoreStatus,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,8 +1,11 @@
 mod database;
 mod focus;
+mod media_cache;
 mod models;
 mod recommendation;
+mod secret_store;
 mod sync;
+mod sync_clock;
 
 use std::{
     collections::HashMap,
@@ -21,12 +24,14 @@ use focus::FocusService;
 use models::*;
 use parking_lot::Mutex;
 use recommendation::GeneratedSection;
+use secret_store::{API_KEY, SYNC_PASSPHRASE, SecretStore, WEBDAV_PASSWORD};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_notification::{NotificationExt, PermissionState};
 use tauri_plugin_opener::OpenerExt;
 use uuid::Uuid;
+use zeroize::Zeroizing;
 
 #[cfg(desktop)]
 use tauri::{
@@ -43,6 +48,8 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 struct AppState {
     database: Arc<Database>,
     focus: Arc<FocusService>,
+    secrets: Arc<SecretStore>,
+    thumbnail_cache: PathBuf,
     canceled_learning: Mutex<HashMap<String, Arc<AtomicBool>>>,
     #[cfg(desktop)]
     quitting: AtomicBool,
@@ -50,6 +57,57 @@ struct AppState {
 
 fn command_result<T>(result: anyhow::Result<T>) -> Result<T, String> {
     result.map_err(|error| error.to_string())
+}
+
+fn task_mutation(task: Option<Task>, removed_task_ids: Vec<String>) -> TaskMutationResult {
+    let upserted_tags = task
+        .as_ref()
+        .map(|item| item.tags.clone())
+        .unwrap_or_default();
+    TaskMutationResult {
+        changes: EntityChangeSet {
+            upserted_tasks: task.iter().cloned().collect(),
+            removed_task_ids,
+            upserted_tags,
+        },
+        task,
+    }
+}
+
+#[tauri::command]
+async fn media_thumbnail_data_url(
+    state: State<'_, AppState>,
+    source: String,
+) -> Result<String, String> {
+    command_result(media_cache::thumbnail_data_url(&state.thumbnail_cache, &source).await)
+}
+
+#[tauri::command]
+fn app_bootstrap(state: State<'_, AppState>) -> Result<BootstrapSnapshot, String> {
+    command_result((|| {
+        let mut recommendation_settings: RecommendationSettings = state
+            .database
+            .setting("recommendationSettings", RecommendationSettings::default())?;
+        recommendation_settings.has_api_key = state.secrets.has(API_KEY);
+        let mut sync_settings = state.database.get_sync_settings()?;
+        sync_settings.has_credentials = state.secrets.has(WEBDAV_PASSWORD);
+        let migration = state
+            .database
+            .setting("secretMigration", "not-needed".to_string())?;
+        Ok(BootstrapSnapshot {
+            tasks: state.database.list_tasks()?,
+            lists: state.database.list_lists()?,
+            tags: state.database.list_tags()?,
+            settings: state.database.get_settings()?,
+            focus_state: state.focus.get_state(),
+            focus_stats: state.database.get_focus_stats()?,
+            recommendation_settings,
+            sync_settings,
+            sync_state: state.database.get_sync_state()?,
+            sync_conflicts: state.database.list_conflicts()?,
+            secret_store: state.secrets.status(&migration),
+        })
+    })())
 }
 
 #[cfg(desktop)]
@@ -162,8 +220,16 @@ fn tasks_list(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
 }
 
 #[tauri::command]
-fn tasks_create(state: State<'_, AppState>, input: CreateTaskInput) -> Result<Task, String> {
-    command_result(state.database.create_task(input))
+fn tasks_create(
+    state: State<'_, AppState>,
+    input: CreateTaskInput,
+) -> Result<TaskMutationResult, String> {
+    command_result(
+        state
+            .database
+            .create_task(input)
+            .map(|task| task_mutation(Some(task), vec![])),
+    )
 }
 
 #[tauri::command]
@@ -171,28 +237,63 @@ fn tasks_update(
     state: State<'_, AppState>,
     id: String,
     input: UpdateTaskInput,
-) -> Result<Task, String> {
-    command_result(state.database.update_task(&id, input))
+) -> Result<TaskMutationResult, String> {
+    command_result(
+        state
+            .database
+            .update_task(&id, input)
+            .map(|task| task_mutation(Some(task), vec![])),
+    )
 }
 
 #[tauri::command]
-fn tasks_complete(state: State<'_, AppState>, id: String, completed: bool) -> Result<Task, String> {
-    command_result(state.database.complete_task(&id, completed))
+fn tasks_complete(
+    state: State<'_, AppState>,
+    id: String,
+    completed: bool,
+) -> Result<TaskMutationResult, String> {
+    command_result(
+        state
+            .database
+            .complete_task(&id, completed)
+            .map(|task| task_mutation(Some(task), vec![])),
+    )
 }
 
 #[tauri::command]
-fn tasks_delete(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    command_result(state.database.delete_task(&id))
+fn tasks_delete(state: State<'_, AppState>, id: String) -> Result<TaskMutationResult, String> {
+    command_result(
+        state
+            .database
+            .delete_task(&id)
+            .map(|()| task_mutation(None, vec![id])),
+    )
 }
 
 #[tauri::command]
-fn tasks_restore(state: State<'_, AppState>, id: String) -> Result<Task, String> {
-    command_result(state.database.restore_task(&id))
+fn tasks_restore(state: State<'_, AppState>, id: String) -> Result<TaskMutationResult, String> {
+    command_result(
+        state
+            .database
+            .restore_task(&id)
+            .map(|task| task_mutation(Some(task), vec![])),
+    )
 }
 
 #[tauri::command]
-fn tasks_reorder(state: State<'_, AppState>, ids: Vec<String>) -> Result<(), String> {
-    command_result(state.database.reorder_tasks(&ids))
+fn tasks_reorder(
+    state: State<'_, AppState>,
+    ids: Vec<String>,
+) -> Result<Vec<TaskOrderPatch>, String> {
+    command_result(state.database.reorder_tasks(&ids).map(|()| {
+        ids.into_iter()
+            .enumerate()
+            .map(|(index, id)| TaskOrderPatch {
+                id,
+                position: ((index + 1) * 1000) as f64,
+            })
+            .collect()
+    }))
 }
 
 #[tauri::command]
@@ -233,6 +334,14 @@ fn focus_get_state(state: State<'_, AppState>) -> FocusState {
 #[tauri::command]
 fn focus_get_stats(state: State<'_, AppState>) -> Result<FocusStats, String> {
     command_result(state.database.get_focus_stats())
+}
+
+#[tauri::command]
+fn focus_history(
+    state: State<'_, AppState>,
+    query: FocusHistoryQuery,
+) -> Result<FocusHistoryPage, String> {
+    command_result(state.database.get_focus_history(query))
 }
 
 #[tauri::command]
@@ -356,14 +465,14 @@ async fn learning_generate(
     task_id: String,
     sections: Option<Vec<String>>,
     include_notes: Option<bool>,
-    api_key: Option<String>,
 ) -> Result<LearningPack, String> {
     let database = state.database.clone();
     let task = command_result(database.get_task(&task_id))?;
     let mut settings: RecommendationSettings = command_result(
         database.setting("recommendationSettings", RecommendationSettings::default()),
     )?;
-    settings.has_api_key = api_key.as_ref().is_some_and(|value| !value.is_empty());
+    let api_key = command_result(state.secrets.get(API_KEY))?;
+    settings.has_api_key = api_key.is_some();
     let pack = command_result(database.ensure_learning_pack(&task_id))?;
     if settings.provider == "offline" {
         return Ok(pack);
@@ -418,7 +527,7 @@ async fn learning_generate(
         );
         let task = task.clone();
         let settings = settings.clone();
-        let api_key = api_key.clone();
+        let api_key = api_key.as_ref().map(|value| value.to_string());
         let cancellation = cancellation.clone();
         let include_notes = include_notes.unwrap_or(false);
         jobs.spawn(async move {
@@ -686,13 +795,12 @@ fn learning_node_set_status(
 #[tauri::command]
 fn recommendation_get_settings(
     state: State<'_, AppState>,
-    has_api_key: bool,
 ) -> Result<RecommendationSettings, String> {
     command_result((|| {
         let mut settings: RecommendationSettings = state
             .database
             .setting("recommendationSettings", RecommendationSettings::default())?;
-        settings.has_api_key = has_api_key;
+        settings.has_api_key = state.secrets.has(API_KEY);
         Ok(settings)
     })())
 }
@@ -700,10 +808,20 @@ fn recommendation_get_settings(
 #[tauri::command]
 fn recommendation_update_settings(
     state: State<'_, AppState>,
-    input: UpdateRecommendationSettingsInput,
-    has_api_key: bool,
+    mut input: UpdateRecommendationSettingsInput,
 ) -> Result<RecommendationSettings, String> {
     command_result((|| {
+        if input.clear_api_key.unwrap_or(false) {
+            state.secrets.delete(API_KEY)?;
+        }
+        if let Some(api_key) = input.api_key.take() {
+            let api_key = api_key.trim();
+            if !api_key.is_empty() {
+                state.secrets.set(API_KEY, api_key, true)?;
+            }
+        }
+        input.clear_api_key = None;
+        let has_api_key = state.secrets.has(API_KEY);
         let current: RecommendationSettings = state
             .database
             .setting("recommendationSettings", RecommendationSettings::default())?;
@@ -720,9 +838,15 @@ fn recommendation_update_settings(
 #[tauri::command]
 async fn recommendation_test_connection(
     state: State<'_, AppState>,
-    input: Option<UpdateRecommendationSettingsInput>,
-    api_key: Option<String>,
+    mut input: Option<UpdateRecommendationSettingsInput>,
 ) -> Result<OperationResult, String> {
+    let supplied_key = input
+        .as_mut()
+        .and_then(|value| value.api_key.take())
+        .filter(|value| !value.trim().is_empty())
+        .map(Zeroizing::new);
+    let stored_key = command_result(state.secrets.get(API_KEY))?;
+    let api_key = supplied_key.as_ref().or(stored_key.as_ref());
     let current: RecommendationSettings = command_result(
         state
             .database
@@ -732,12 +856,14 @@ async fn recommendation_test_connection(
         command_result(recommendation::merge_settings(
             current,
             input,
-            api_key.as_ref().is_some_and(|value| !value.is_empty()),
+            api_key.is_some(),
         ))?
     } else {
         current
     };
-    command_result(recommendation::test_connection(&settings, api_key.as_deref()).await)
+    command_result(
+        recommendation::test_connection(&settings, api_key.map(|value| value.as_str())).await,
+    )
 }
 
 #[tauri::command]
@@ -747,6 +873,12 @@ fn sync_configure(
 ) -> Result<SyncSettings, String> {
     command_result((|| {
         sync::validate_configuration(&input)?;
+        state.secrets.set(WEBDAV_PASSWORD, &input.password, true)?;
+        state.secrets.set(
+            SYNC_PASSPHRASE,
+            &input.passphrase,
+            input.remember_passphrase,
+        )?;
         let current = state.database.get_sync_settings()?;
         let settings = sync::to_settings(&input, current.device_id);
         state.database.set_sync_settings(&settings)?;
@@ -759,17 +891,36 @@ fn sync_configure(
 }
 
 #[tauri::command]
-async fn sync_test(input: ConfigureSyncInput) -> Result<OperationResult, String> {
+async fn sync_test(
+    state: State<'_, AppState>,
+    input: Option<ConfigureSyncInput>,
+) -> Result<OperationResult, String> {
+    if let Some(input) = input {
+        return command_result(sync::test_webdav(&input).await);
+    }
+    let settings = command_result(state.database.get_sync_settings())?;
+    let password = command_result(state.secrets.get(WEBDAV_PASSWORD))?
+        .ok_or_else(|| "WebDAV 密码未保存，请重新配置同步".to_string())?;
+    let passphrase = command_result(state.secrets.get(SYNC_PASSPHRASE))?
+        .ok_or_else(|| "请输入同步口令后再测试".to_string())?;
+    let input = ConfigureSyncInput {
+        server_url: settings.server_url,
+        username: settings.username,
+        password: password.to_string(),
+        passphrase: passphrase.to_string(),
+        remote_path: settings.remote_path,
+        remember_passphrase: settings.remember_passphrase,
+        device_name: settings.device_name,
+    };
     command_result(sync::test_webdav(&input).await)
 }
 
 #[tauri::command]
-async fn sync_run(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    password: String,
-    passphrase: String,
-) -> Result<SyncState, String> {
+async fn sync_run(app: AppHandle, state: State<'_, AppState>) -> Result<SyncState, String> {
+    let password = command_result(state.secrets.get(WEBDAV_PASSWORD))?
+        .ok_or_else(|| "WebDAV 密码未保存，请重新配置同步".to_string())?;
+    let passphrase = command_result(state.secrets.get(SYNC_PASSPHRASE))?
+        .ok_or_else(|| "请输入同步口令后再同步".to_string())?;
     let settings = command_result(state.database.get_sync_settings())?;
     let database = state.database.clone();
     let running = command_result(database.get_sync_state())?;
@@ -801,6 +952,8 @@ async fn sync_run(
 #[tauri::command]
 fn sync_disconnect(state: State<'_, AppState>) -> Result<(), String> {
     command_result((|| {
+        state.secrets.delete(WEBDAV_PASSWORD)?;
+        state.secrets.delete(SYNC_PASSPHRASE)?;
         let current = state.database.get_sync_settings()?;
         state.database.set_sync_settings(&SyncSettings {
             enabled: false,
@@ -808,6 +961,7 @@ fn sync_disconnect(state: State<'_, AppState>) -> Result<(), String> {
             username: String::new(),
             remote_path: "Nudge/nudge-v2.enc".into(),
             remember_passphrase: false,
+            sync_v3_confirmed: false,
             has_credentials: false,
             device_id: current.device_id,
             device_name: current.device_name,
@@ -818,14 +972,61 @@ fn sync_disconnect(state: State<'_, AppState>) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn sync_get_settings(
-    state: State<'_, AppState>,
-    has_credentials: bool,
-) -> Result<SyncSettings, String> {
+fn sync_get_settings(state: State<'_, AppState>) -> Result<SyncSettings, String> {
     command_result((|| {
         let mut settings = state.database.get_sync_settings()?;
-        settings.has_credentials = has_credentials;
+        settings.has_credentials = state.secrets.has(WEBDAV_PASSWORD);
         Ok(settings)
+    })())
+}
+
+#[tauri::command]
+fn sync_confirm_upgrade(state: State<'_, AppState>) -> Result<SyncSettings, String> {
+    command_result((|| {
+        let mut settings = state.database.get_sync_settings()?;
+        settings.sync_v3_confirmed = true;
+        state.database.set_sync_settings(&settings)?;
+        Ok(settings)
+    })())
+}
+
+#[tauri::command]
+fn secrets_status(state: State<'_, AppState>) -> Result<SecretStoreStatus, String> {
+    let migration = state
+        .database
+        .setting("secretMigration", "not-needed".to_string())
+        .unwrap_or_else(|_| "unknown".into());
+    Ok(state.secrets.status(&migration))
+}
+
+#[tauri::command]
+fn secrets_import_legacy(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    input: LegacySecretsInput,
+) -> Result<SecretStoreStatus, String> {
+    command_result((|| {
+        if let Some(value) = input
+            .recommendation_api_key
+            .filter(|value| !value.is_empty())
+        {
+            state.secrets.set(API_KEY, &value, true)?;
+        }
+        if let Some(value) = input.webdav_password.filter(|value| !value.is_empty()) {
+            state.secrets.set(WEBDAV_PASSWORD, &value, true)?;
+        }
+        if let Some(value) = input.sync_passphrase.filter(|value| !value.is_empty()) {
+            let remember = state.database.get_sync_settings()?.remember_passphrase;
+            state.secrets.set(SYNC_PASSPHRASE, &value, remember)?;
+        }
+        let vault = app.path().app_data_dir()?.join("nudge-vault.hold");
+        if vault.exists() {
+            fs::remove_file(&vault).context("新密钥验证成功，但旧密钥库未能删除")?;
+        }
+        state
+            .database
+            .set_setting("secretMigration", &"completed")?;
+        Ok(state.secrets.status("completed"))
     })())
 }
 
@@ -1090,6 +1291,20 @@ pub fn run() {
                 Database::open(database_path, legacy_database, legacy_json)
                     .context("打开并迁移数据库")?,
             );
+            let secrets = Arc::new(SecretStore::new());
+            let thumbnail_cache = app.path().app_cache_dir()?.join("thumbnails");
+            let legacy_vault = app.path().app_data_dir()?.join("nudge-vault.hold");
+            let previous_migration: String = database.setting("secretMigration", String::new())?;
+            if previous_migration != "completed" {
+                database.set_setting(
+                    "secretMigration",
+                    &if legacy_vault.exists() {
+                        "pending"
+                    } else {
+                        "not-needed"
+                    },
+                )?;
+            }
             let _ = database.create_database_backup(false);
             let focus = Arc::new(FocusService::new(database.clone()).context("恢复专注计时状态")?);
             setup_background_services(app.handle(), focus.clone(), database.clone());
@@ -1098,6 +1313,8 @@ pub fn run() {
             app.manage(AppState {
                 database,
                 focus,
+                secrets,
+                thumbnail_cache,
                 canceled_learning: Mutex::new(HashMap::new()),
                 #[cfg(desktop)]
                 quitting: AtomicBool::new(false),
@@ -1141,6 +1358,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            app_bootstrap,
             tasks_list,
             tasks_create,
             tasks_update,
@@ -1155,6 +1373,7 @@ pub fn run() {
             tags_list,
             focus_get_state,
             focus_get_stats,
+            focus_history,
             focus_start,
             focus_pause,
             focus_resume,
@@ -1182,11 +1401,14 @@ pub fn run() {
             recommendation_get_settings,
             recommendation_update_settings,
             recommendation_test_connection,
+            secrets_status,
+            secrets_import_legacy,
             sync_configure,
             sync_test,
             sync_run,
             sync_disconnect,
             sync_get_settings,
+            sync_confirm_upgrade,
             sync_get_state,
             sync_list_conflicts,
             sync_resolve_conflict,
@@ -1197,7 +1419,8 @@ pub fn run() {
             desktop_toggle_maximize,
             desktop_close,
             desktop_platform,
-            notifications_prepare
+            notifications_prepare,
+            media_thumbnail_data_url
         ]);
 
     #[cfg(desktop)]

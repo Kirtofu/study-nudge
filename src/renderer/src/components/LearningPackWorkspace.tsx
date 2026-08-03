@@ -14,7 +14,6 @@ import {
   verticalListSortingStrategy
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import dagre from '@dagrejs/dagre'
 import { AnimatePresence, motion } from 'motion/react'
 import {
   applyNodeChanges,
@@ -116,6 +115,7 @@ function SortableResourceCard({
 }): React.JSX.Element {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [thumbnail, setThumbnail] = useState<string | null>(null)
   const [draft, setDraft] = useState({
     title: resource.title,
     summary: resource.summary,
@@ -128,6 +128,16 @@ function SortableResourceCard({
   useEffect(() => {
     setDraft({ title: resource.title, summary: resource.summary, url: resource.url, platform: resource.platform })
   }, [resource])
+
+  useEffect(() => {
+    let disposed = false
+    setThumbnail(null)
+    if (!resource.verified || !resource.thumbnailUrl) return
+    void api.media.thumbnailDataUrl(resource.thumbnailUrl).then((dataUrl) => {
+      if (!disposed && dataUrl) setThumbnail(dataUrl)
+    }).catch(() => undefined)
+    return () => { disposed = true }
+  }, [resource.thumbnailUrl, resource.verified])
 
   const saveResource = async (): Promise<void> => {
     if (!draft.title.trim()) return
@@ -194,8 +204,8 @@ function SortableResourceCard({
         </form>
       ) : (
         <>
-          {resource.thumbnailUrl ? (
-            <img className="resource-thumbnail" src={resource.thumbnailUrl} alt="" loading="lazy" />
+          {thumbnail ? (
+            <img className="resource-thumbnail" src={thumbnail} alt="" loading="lazy" />
           ) : (
             <span className="resource-kind-icon" aria-hidden="true">
               {resource.kind === 'video' ? <Video size={15} /> : resource.kind === 'tool' ? <GitBranch size={15} /> : <FileText size={15} />}
@@ -430,18 +440,6 @@ function createsCycle(edges: Edge[], source: string, target: string): boolean {
   return false
 }
 
-function layoutWithDagre(nodes: LearningNode[], edges: LearningEdge[]): Array<LearningNode> {
-  const graph = new dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
-  graph.setGraph({ rankdir: 'TB', ranksep: 64, nodesep: 36, marginx: 24, marginy: 24 })
-  nodes.forEach((node) => graph.setNode(node.id, { width: 190, height: 72 }))
-  edges.forEach((edge) => graph.setEdge(edge.sourceNodeId, edge.targetNodeId))
-  dagre.layout(graph)
-  return nodes.map((node) => {
-    const position = graph.node(node.id) as { x: number; y: number } | undefined
-    return position ? { ...node, x: position.x - 95, y: position.y - 36 } : node
-  })
-}
-
 function NodeInspector({
   node,
   onSaved,
@@ -568,20 +566,25 @@ function RoadmapColumn({
 
   const autoLayout = async (): Promise<void> => {
     const previous = pack.nodes.map((node) => ({ id: node.id, x: node.x, y: node.y, title: node.title }))
-    const layout = layoutWithDagre(pack.nodes, pack.edges)
-    await Promise.all(layout.map((node) => api.learning.roadmap.upsertNode(pack.taskId, node)))
-    pushUndo({
-      label: '撤销自动布局',
-      run: async () => {
-        await Promise.all(previous.map((node) => {
-          const current = pack.nodes.find((item) => item.id === node.id)!
-          return api.learning.roadmap.upsertNode(pack.taskId, { ...current, x: node.x, y: node.y, title: current.title })
-        }))
-        await onChanged()
-      }
-    })
-    await onChanged()
-    showToast({ message: '路线图已经自动排版' })
+    try {
+      const next = await api.learning.roadmap.autoLayout(pack.taskId)
+      useNudgeStore.setState((state) => ({
+        learningPacks: { ...state.learningPacks, [pack.taskId]: next }
+      }))
+      pushUndo({
+        label: '撤销自动布局',
+        run: async () => {
+          await Promise.all(previous.map((node) => {
+            const current = next.nodes.find((item) => item.id === node.id)!
+            return api.learning.roadmap.upsertNode(pack.taskId, { ...current, x: node.x, y: node.y, title: current.title })
+          }))
+          await onChanged()
+        }
+      })
+      showToast({ message: '路线图已经自动排版' })
+    } catch (error) {
+      showToast({ message: '路线图没有排版成功', detail: error instanceof Error ? error.message : '请稍后重试' })
+    }
   }
 
   const addNode = async (): Promise<void> => {

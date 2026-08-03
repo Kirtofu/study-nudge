@@ -27,6 +27,15 @@ import { api } from '../bridge'
 import { useNudgeStore } from '../store'
 import { useToast } from './Toast'
 
+type SettingsTab = 'general' | 'ai' | 'sync' | 'data'
+
+const SETTINGS_TABS: Array<{ id: SettingsTab; label: string }> = [
+  { id: 'general', label: '通用' },
+  { id: 'ai', label: 'AI' },
+  { id: 'sync', label: '同步' },
+  { id: 'data', label: '数据' }
+]
+
 function Toggle({
   checked,
   onChange,
@@ -98,6 +107,7 @@ export function SettingsDrawer(): React.JSX.Element | null {
   const syncSettings = useNudgeStore((state) => state.syncSettings)
   const syncState = useNudgeStore((state) => state.syncState)
   const syncConflicts = useNudgeStore((state) => state.syncConflicts)
+  const secretStore = useNudgeStore((state) => state.secretStore)
   const updateRecommendationSettings = useNudgeStore((state) => state.updateRecommendationSettings)
   const configureSync = useNudgeStore((state) => state.configureSync)
   const runSync = useNudgeStore((state) => state.runSync)
@@ -107,6 +117,7 @@ export function SettingsDrawer(): React.JSX.Element | null {
   const [testingAi, setTestingAi] = useState(false)
   const [testingSync, setTestingSync] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const [aiDraft, setAiDraft] = useState({
     provider: 'offline' as RecommendationProvider,
     endpoint: 'https://api.openai.com/v1',
@@ -190,8 +201,23 @@ export function SettingsDrawer(): React.JSX.Element | null {
         </button>
       </div>
 
+      <div className="settings-tabs" role="tablist" aria-label="设置分类">
+        {SETTINGS_TABS.map((tab) => (
+          <button
+            type="button"
+            role="tab"
+            key={tab.id}
+            aria-selected={activeTab === tab.id}
+            className={activeTab === tab.id ? 'is-active' : ''}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       <div className="drawer-scroll">
-        <section className="settings-section">
+        <section className="settings-section" hidden={activeTab !== 'general'}>
           <div className="settings-section-title">
             <Target size={17} aria-hidden="true" />
             <div>
@@ -235,13 +261,21 @@ export function SettingsDrawer(): React.JSX.Element | null {
           </label>
         </section>
 
-        <section className="settings-section">
+        <section className="settings-section" hidden={activeTab !== 'ai'}>
           <div className="settings-section-title">
             <Bot size={17} aria-hidden="true" />
             <div>
               <h2>学习包推荐</h2>
               <p>默认离线生成模板；只有你主动点击生成时才会联网。</p>
             </div>
+          </div>
+          <div className={`secret-store-status ${secretStore?.available ? 'is-ready' : 'is-session'}`} role="status">
+            <LockKeyhole size={14} aria-hidden="true" />
+            <span>
+              {secretStore?.available
+                ? `密钥由${secretStore.backend || '系统密钥库'}保护`
+                : '系统密钥库不可用，秘密只在本次会话中保留'}
+            </span>
           </div>
           <label className="settings-field">
             <span>推荐方式</span>
@@ -256,7 +290,7 @@ export function SettingsDrawer(): React.JSX.Element | null {
               <label className="settings-field"><span>服务地址</span><input value={aiDraft.endpoint} onChange={(event) => setAiDraft({ ...aiDraft, endpoint: event.target.value })} placeholder={aiDraft.provider === 'ollama' ? 'http://localhost:11434' : 'https://api.example.com/v1'} /></label>
               <label className="settings-field"><span>模型</span><input value={aiDraft.model} onChange={(event) => setAiDraft({ ...aiDraft, model: event.target.value })} /></label>
               {aiDraft.provider === 'openai-compatible' ? (
-                <label className="settings-field"><span>API 密钥</span><input type="password" value={aiDraft.apiKey} onChange={(event) => setAiDraft({ ...aiDraft, apiKey: event.target.value })} placeholder={recommendationSettings?.hasApiKey ? '已安全保存；留空则保持不变' : '只保存到 Stronghold'} autoComplete="off" /></label>
+                <label className="settings-field"><span>API 密钥</span><input type="password" value={aiDraft.apiKey} onChange={(event) => setAiDraft({ ...aiDraft, apiKey: event.target.value })} placeholder={recommendationSettings?.hasApiKey ? '已安全保存；留空则保持不变' : '只保存到系统密钥库'} autoComplete="off" /></label>
               ) : null}
               <div className="settings-toggle-row"><span><Cloud size={15} />允许联网推荐</span><Toggle checked={aiDraft.networkEnabled} label="允许联网推荐" onChange={(networkEnabled) => setAiDraft({ ...aiDraft, networkEnabled })} /></div>
               <div className="settings-toggle-row"><span><FileText size={15} />允许发送任务备注</span><Toggle checked={aiDraft.sendNotes} label="允许发送任务备注" onChange={(sendNotes) => setAiDraft({ ...aiDraft, sendNotes })} /></div>
@@ -282,7 +316,7 @@ export function SettingsDrawer(): React.JSX.Element | null {
           </div>
         </section>
 
-        <section className="settings-section">
+        <section className="settings-section" hidden={activeTab !== 'sync'}>
           <div className="settings-section-title">
             <Cloud size={17} aria-hidden="true" />
             <div>
@@ -292,7 +326,7 @@ export function SettingsDrawer(): React.JSX.Element | null {
           </div>
           <label className="settings-field"><span>服务器地址</span><input value={syncDraft.serverUrl} onChange={(event) => setSyncDraft({ ...syncDraft, serverUrl: event.target.value })} placeholder="https://cloud.example.com/remote.php/dav/files/name/" inputMode="url" /></label>
           <label className="settings-field"><span>用户名</span><input value={syncDraft.username} onChange={(event) => setSyncDraft({ ...syncDraft, username: event.target.value })} autoComplete="username" /></label>
-          <label className="settings-field"><span>WebDAV 密码</span><input type="password" value={syncDraft.password} onChange={(event) => setSyncDraft({ ...syncDraft, password: event.target.value })} placeholder={syncSettings?.hasCredentials ? '已保存在 Stronghold；修改时重新输入' : ''} autoComplete="new-password" /></label>
+          <label className="settings-field"><span>WebDAV 密码</span><input type="password" value={syncDraft.password} onChange={(event) => setSyncDraft({ ...syncDraft, password: event.target.value })} placeholder={syncSettings?.hasCredentials ? '已保存在系统密钥库；修改时重新输入' : ''} autoComplete="new-password" /></label>
           <label className="settings-field"><span>独立同步口令</span><input type="password" value={syncDraft.passphrase} onChange={(event) => setSyncDraft({ ...syncDraft, passphrase: event.target.value })} placeholder="至少 8 个字符；其他设备需要相同口令" autoComplete="new-password" /></label>
           <label className="settings-field"><span>远端文件</span><input value={syncDraft.remotePath} onChange={(event) => setSyncDraft({ ...syncDraft, remotePath: event.target.value })} /></label>
           <label className="settings-field"><span>设备名称</span><input value={syncDraft.deviceName} onChange={(event) => setSyncDraft({ ...syncDraft, deviceName: event.target.value })} /></label>
@@ -302,6 +336,12 @@ export function SettingsDrawer(): React.JSX.Element | null {
             <span>{syncState?.status === 'syncing' ? '正在同步' : syncState?.lastSyncedAt ? `上次同步 ${new Date(syncState.lastSyncedAt).toLocaleString()}` : syncSettings?.enabled ? '已配置，等待首次同步' : '尚未连接'}</span>
             {syncState?.pendingChanges ? <small>{syncState.pendingChanges} 项待上传</small> : null}
           </div>
+          {syncSettings?.enabled && !syncSettings.syncV3Confirmed ? (
+            <div className="settings-warning-note" role="status">
+              <strong>需要确认同步格式升级</strong>
+              <span>v2.1 会使用 schema 3 与加密信封 v2；同一远端文件上的其他设备也需要升级。</span>
+            </div>
+          ) : null}
           {syncState?.lastError ? <p className="settings-error-note">{syncState.lastError}</p> : null}
           <div className="settings-inline-actions sync-actions">
             <button type="button" className="secondary-button" disabled={testingSync || !syncDraft.serverUrl || !syncDraft.password || !syncDraft.passphrase} onClick={() => {
@@ -338,7 +378,7 @@ export function SettingsDrawer(): React.JSX.Element | null {
           ) : null}
         </section>
 
-        <section className="settings-section">
+        <section className="settings-section" hidden={activeTab !== 'general'}>
           <div className="settings-section-title">
             <Clock3 size={17} aria-hidden="true" />
             <div>
@@ -374,7 +414,7 @@ export function SettingsDrawer(): React.JSX.Element | null {
           </label>
         </section>
 
-        <section className="settings-section">
+        <section className="settings-section" hidden={activeTab !== 'general'}>
           <div className="settings-section-title">
             <Power size={17} aria-hidden="true" />
             <div>
@@ -406,7 +446,7 @@ export function SettingsDrawer(): React.JSX.Element | null {
           </label>
         </section>
 
-        <section className="settings-section">
+        <section className="settings-section" hidden={activeTab !== 'general'}>
           <div className="settings-section-title">
             <ListTodo size={17} aria-hidden="true" />
             <div>
@@ -419,7 +459,7 @@ export function SettingsDrawer(): React.JSX.Element | null {
           </div>
         </section>
 
-        <section className="settings-section">
+        <section className="settings-section" hidden={activeTab !== 'data'}>
           <div className="settings-section-title">
             <ArchiveRestore size={17} aria-hidden="true" />
             <div>

@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/Kirtofu/study-nudge/actions/workflows/quality.yml"><img src="https://github.com/Kirtofu/study-nudge/actions/workflows/quality.yml/badge.svg?branch=main" alt="Quality"></a>
-  <a href="https://github.com/Kirtofu/study-nudge/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/release-v2.0.0-c96442?style=flat-square" alt="v2.0.0"></a>
+  <a href="https://github.com/Kirtofu/study-nudge/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/stable-v2.0.0-c96442?style=flat-square" alt="stable v2.0.0"></a>
   <img src="https://img.shields.io/badge/default-local%20first-247a48?style=flat-square" alt="Local first">
 </p>
 
@@ -18,8 +18,10 @@
 
 Nudge 使用 Tauri 2、React、TypeScript、Rust 与 SQLite。输入任务后可以直接保存，也可以选择“规划并添加”，立即得到与任务绑定的学习包：资料与工具、精选视频、可编辑学习路线。应用默认不需要账号、不依赖云端，AI 推荐和 WebDAV 加密同步都由用户主动开启。
 
+当前 `v2.1-hardening` 分支正在完善安全存储、同步可靠性、启动性能和可恢复错误处理。可下载的稳定版仍为 `v2.0.0`；`v2.1.0-rc.1` 会在跨平台 CI 和迁移/同步冒烟测试通过后发布。
+
 > [!IMPORTANT]
-> `v2.0.0` 是正式版本。桌面包暂未接入平台签名，Android 提供测试 APK，iOS 提供 Apple Silicon 模拟器 `.app.zip`。请从 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.0.0) 下载并核对 `SHA256SUMS.txt`。
+> `v2.0.0` 是当前稳定版本。桌面包暂未接入平台签名，Android 提供测试 APK，iOS 提供 Apple Silicon 模拟器 `.app.zip`。请从 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.0.0) 下载并核对 `SHA256SUMS.txt`。
 
 ## 下载 v2.0.0
 
@@ -114,7 +116,8 @@ AI 不会因为创建普通任务而自动运行。只有点击“规划并添�
 
 首次联网生成前会明确展示将发送的数据。默认只发送任务标题、标签和用户主动填写的学习目标；任务备注必须单独授权。不会发送其他任务、数据库、专注历史、AI 密钥、WebDAV 凭据或同步口令。
 
-- API Key 只保存在 Tauri Stronghold，不写入 SQLite、日志、JSON 备份或同步快照。
+- API Key、WebDAV 密码和可选同步口令由 Rust 保存到 Windows Credential Manager、macOS/iOS Keychain、Android Keystore 或 Linux Secret Service；不写入 SQLite、日志、JSON 备份或同步快照。
+- 系统密钥库不可用时只允许本次会话使用，不会静默写入明文文件。旧版 `nudge-vault.hold` 仅在新密钥库写入并回读验证成功后删除。
 - 三栏独立生成，一栏失败不会清空其他两栏；支持取消、单栏重试和保留固定内容。
 - 输出必须通过结构化 JSON 校验、数量限制、文本清洗与 URL 安全检查。
 - 远程链接只允许 HTTPS；Ollama 仅对本机 HTTP 例外。
@@ -136,7 +139,8 @@ sequenceDiagram
 ```
 
 - WebDAV 服务器只看到版本、盐、随机数和密文。
-- 凭据与记住的同步口令保存在 Stronghold，不进入导出或跨设备同步。
+- WebDAV 凭据与记住的同步口令保存在系统密钥库，不进入导出或跨设备同步。
+- `v2.1` 同步格式使用 schema 3 和加密信封 v2；升级同步前会显示兼容提示，参与同一 WebDAV 文件的设备需全部升级到 `v2.1`。
 - 每条同步记录包含混合逻辑时钟、设备 ID、修订号和删除墓碑。
 - 使用 ETag 条件写入；遇到 `412 Precondition Failed` 会重新下载、合并并重试。
 - 断网修改进入持久队列；并发冲突保存在“同步冲突”中，可选择本地或远端版本恢复。
@@ -159,6 +163,15 @@ sequenceDiagram
 - 桌面端支持置顶迷你窗、托盘、原生通知、开机启动和全局快速添加。
 - 移动端使用系统通知与安全区底部导航，不提供常驻迷你窗。
 
+### v2.1 体验与性能改进
+
+- 启动通过一次 `app.bootstrap()` 载入任务、清单、标签、设置、专注状态、推荐配置与同步摘要。
+- 新建、编辑、完成、删除与排序只合并变动实体，并在失败时恢复操作前状态。
+- 详情自动保存按任务串行，合并尚未发送的字段，过期响应不会覆盖新草稿。
+- 设置按“通用、AI、同步、数据”分栏；切换标签不会丢失未提交内容。
+- 专注历史支持 7 天、30 天和全部范围，并按日期显示时长、模式与关联任务。
+- 首屏按需加载学习包、设置、命令面板和专注历史；CI 限制首屏 JS、CSS 与字体体积。
+
 ## 数据、备份与 v1 迁移
 
 渲染层不能直接访问文件系统或数据库。所有读写通过类型化 Tauri 命令进入 Rust，输入在边界统一验证。
@@ -177,11 +190,11 @@ sequenceDiagram
 首次启动 v2 时会检测 `%APPDATA%\Nudge\nudge.db`：
 
 1. 使用 SQLite Backup API 复制到 v2 应用目录。
-2. 在副本上执行 schema v2 迁移。
+2. 在副本上执行 SQLite schema 迁移，并在迁移前创建备份。
 3. 为旧任务初始化空学习包。
 4. 保留原数据库和原有最近 7 份备份，不修改、不删除。
 
-JSON 备份升级为 `schemaVersion: 2`，仍接受 v1 备份。旧 `data.json` 继续按内容哈希幂等导入专注记录；仓库中的 `study-nudge.ps1` 和 `data.json` 保持原样，脚本后续写入的记录会在应用启动时继续同步导入。
+JSON 备份当前为 `schemaVersion: 3`，仍接受 v1/v2 备份并为旧任务初始化空学习包。旧 `data.json` 继续按内容哈希幂等导入专注记录；仓库中的 `study-nudge.ps1` 和 `data.json` 保持原样，脚本后续写入的记录会在应用启动时继续同步导入。
 
 支持 JSON 导出、合并导入、覆盖恢复、恢复前自动备份以及每日备份轮换。
 
@@ -193,7 +206,7 @@ flowchart LR
   CMD --> DB["rusqlite / SQLite"]
   CMD --> REC["推荐引擎与安全内容验证"]
   CMD --> SYNC["WebDAV 加密与记录合并"]
-  CMD --> SECRET["Stronghold 凭据库"]
+  CMD --> SECRET["系统密钥库 / Credential Manager / Keychain"]
   CMD --> OS["托盘 / 通知 / 快捷键 / 窗口 / 系统浏览器"]
   REC -. 用户主动启用 .-> AI["OpenAI-compatible / Ollama"]
   SYNC -. 用户主动启用 .-> DAV["WebDAV / Nextcloud"]
@@ -205,16 +218,18 @@ flowchart LR
 - React 19 + TypeScript 5 + Vite 7。
 - `rusqlite` + SQLite Backup API。
 - Zustand 状态管理、Motion 动效、dnd-kit 拖拽。
-- `@xyflow/react` + Dagre 路线图。
+- `@xyflow/react` 路线图；自动布局由 Rust 单次命令完成。
 - Argon2id + XChaCha20-Poly1305 加密同步。
-- Tauri Stronghold 保存 AI / WebDAV 秘密。
+- Rust 系统密钥库保存 AI / WebDAV 秘密；旧 vault 仅用于一次性迁移。
 - Vitest + Testing Library + Rust 单元测试。
 
 ### 类型化公共接口
 
 渲染层通过统一桥接调用以下 API 族：
 
+- `app.bootstrap()` 返回 `BootstrapSnapshot`，任务写入返回可局部合并的 `EntityChangeSet`。
 - `tasks`、`lists`、`tags`、`focus`、`settings`、`backup`、`desktop`。
+- `focus.history(query)` 返回分页专注历史。
 - `learning.get / ensure / generate / cancel`。
 - `learning.resources.create / update / delete / reorder / pin`。
 - `learning.roadmap.upsertNode / deleteNode / connect / disconnect / autoLayout / setStatus`。
@@ -222,14 +237,14 @@ flowchart LR
 - `sync.configure / test / run / disconnect / getState / listConflicts / resolveConflict`。
 - `learning.onProgress` 与 `sync.onStateChanged` 事件流。
 
-SQLite v2 新增 `learning_packs`、`learning_resources`、`learning_nodes`、`learning_edges`、`sync_conflicts`、同步队列与修订元数据。AI 密钥和 WebDAV 秘密不在这些表中。
+SQLite schema 3 新增 `learning_packs`、`learning_resources`、`learning_nodes`、`learning_edges`、`sync_conflicts`、同步队列与修订元数据，并为任务标签关联增加版本向量和墓碑字段。AI 密钥和 WebDAV 秘密不在这些表中。
 
 ## 本地开发
 
 ### 通用要求
 
 - Node.js 22 LTS、npm 10+。
-- Rust 1.85+，包含 `rustfmt` 与 `clippy`。
+- Rust 1.88+，包含 `rustfmt` 与 `clippy`。
 - Git；只有维护 v1 历史软件包时才需要 Git LFS。
 
 ```bash
@@ -246,6 +261,7 @@ npm run dev:web
 npm run typecheck
 npm test -- --run
 npm run build:web
+npm run check:bundle
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets --all-features -- -D warnings
 cargo test --manifest-path src-tauri/Cargo.toml
@@ -310,7 +326,7 @@ npx tauri ios build --target aarch64-sim --debug --ci
 
 ## CI 与发布
 
-`.github/workflows/quality.yml` 在 push / pull request 上运行类型检查、React/Vitest、Vite 生产构建以及 Rust fmt、clippy、test。
+`.github/workflows/quality.yml` 在 push / pull request 上运行类型检查、React/Vitest、Vite 生产构建、体积预算、npm/Rust 依赖审计以及 Rust fmt、clippy、test。
 
 `.github/workflows/release.yml` 在版本 tag 上构建：
 

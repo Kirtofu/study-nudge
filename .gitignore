@@ -10,3 +10,5 @@ coverage/
 .vite/
 .impeccable/
 .firecrawl/
+test-results/
+playwright-report/

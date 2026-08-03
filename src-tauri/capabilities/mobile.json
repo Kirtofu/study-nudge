@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/mobile-schema.json",
   "identifier": "mobile",
-  "description": "Nudge mobile capabilities for local data, backup dialogs, notifications, links and Stronghold secrets",
+  "description": "Nudge mobile capabilities for local data, backup dialogs, notifications and links",
   "platforms": ["android", "iOS"],
   "windows": ["main"],
   "permissions": [

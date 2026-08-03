@@ -12,7 +12,6 @@ import {
   X
 } from 'lucide-react'
 import type { ViewId } from '@shared/types'
-import { api } from '../bridge'
 import { useNudgeStore } from '../store'
 import { filterTasks, formatDuration } from '../utils'
 import { useToast } from './Toast'
@@ -38,6 +37,7 @@ export function Sidebar(): React.JSX.Element {
   const setView = useNudgeStore((state) => state.setView)
   const createList = useNudgeStore((state) => state.createList)
   const openSettings = useNudgeStore((state) => state.openSettings)
+  const openFocusHistory = useNudgeStore((state) => state.openFocusHistory)
   const [addingList, setAddingList] = useState(false)
   const [newListName, setNewListName] = useState('')
   const showToast = useToast()
@@ -156,14 +156,7 @@ export function Sidebar(): React.JSX.Element {
         <button
           type="button"
           className="focus-summary"
-          onClick={() => {
-            void api.desktop.toggleMiniWindow().catch((error) => {
-              showToast({
-                message: '专注迷你窗没有打开',
-                detail: error instanceof Error ? error.message : '请稍后重试'
-              })
-            })
-          }}
+          onClick={openFocusHistory}
         >
           <span className="focus-summary-ring" style={{ '--progress': dailyProgress } as React.CSSProperties}>
             <TimerReset size={16} aria-hidden="true" />

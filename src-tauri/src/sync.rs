@@ -61,6 +61,7 @@ pub fn to_settings(input: &ConfigureSyncInput, device_id: String) -> SyncSetting
         username: input.username.trim().to_string(),
         remote_path: input.remote_path.trim_start_matches('/').to_string(),
         remember_passphrase: input.remember_passphrase,
+        sync_v3_confirmed: true,
         has_credentials: true,
         device_id,
         device_name: if input.device_name.trim().is_empty() {
@@ -224,7 +225,7 @@ pub fn encrypt_snapshot(payload: &Value, passphrase: &str) -> Result<Vec<u8>> {
         .encrypt(XNonce::from_slice(&nonce), plaintext.as_ref())
         .map_err(|_| anyhow!("同步数据加密失败"))?;
     Ok(serde_json::to_vec(&EncryptedEnvelope {
-        version: 1,
+        version: 2,
         algorithm: "argon2id+xchacha20poly1305".into(),
         salt: BASE64.encode(salt),
         nonce: BASE64.encode(nonce),
@@ -238,7 +239,7 @@ pub fn decrypt_snapshot(encrypted: &[u8], passphrase: &str) -> Result<Value> {
     }
     let envelope: EncryptedEnvelope =
         serde_json::from_slice(encrypted).context("远端同步文件格式无效")?;
-    if envelope.version != 1 || envelope.algorithm != "argon2id+xchacha20poly1305" {
+    if !matches!(envelope.version, 1 | 2) || envelope.algorithm != "argon2id+xchacha20poly1305" {
         bail!("远端同步加密版本不受支持");
     }
     let salt = BASE64.decode(envelope.salt).context("同步盐值损坏")?;
@@ -272,8 +273,24 @@ fn webdav_client() -> Result<Client> {
     Ok(Client::builder()
         .connect_timeout(std::time::Duration::from_secs(15))
         .timeout(std::time::Duration::from_secs(90))
-        .redirect(reqwest::redirect::Policy::limited(3))
-        .user_agent("Nudge/2.0 encrypted-webdav")
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            if attempt.previous().len() >= 3 {
+                return attempt.error("WebDAV 重定向次数过多");
+            }
+            let Some(previous) = attempt.previous().last() else {
+                return attempt.follow();
+            };
+            let next = attempt.url();
+            let same_origin = previous.scheme() == next.scheme()
+                && previous.host_str() == next.host_str()
+                && previous.port_or_known_default() == next.port_or_known_default();
+            if same_origin && (next.scheme() == "https" || next.host_str() == Some("localhost")) {
+                attempt.follow()
+            } else {
+                attempt.error("WebDAV 拒绝跨域或降级重定向")
+            }
+        }))
+        .user_agent("Nudge/2.1 encrypted-webdav")
         .build()?)
 }
 
@@ -307,7 +324,7 @@ mod tests {
 
     #[test]
     fn encrypted_snapshot_round_trip_and_wrong_passphrase() {
-        let payload = json!({"schemaVersion": 2, "data": {"tasks": [{"id": "one"}]}});
+        let payload = json!({"schemaVersion": 3, "data": {"tasks": [{"id": "one"}]}});
         let encrypted = encrypt_snapshot(&payload, "correct horse battery staple").unwrap();
         assert!(!String::from_utf8_lossy(&encrypted).contains("one"));
         assert_eq!(

@@ -19,11 +19,12 @@ use sha2::{Digest, Sha256};
 use uuid::Uuid;
 
 use crate::models::{
-    AppSettings, CreateLearningResourceInput, CreateTaskInput, FocusSession, FocusState,
-    FocusStats, LearningEdge, LearningNode, LearningPack, LearningResource, SyncConflict,
-    SyncSettings, SyncState, Tag, Task, TaskList, UpdateAppSettingsInput,
-    UpdateLearningResourceInput, UpdateTaskInput, UpsertLearningNodeInput,
+    AppSettings, CreateLearningResourceInput, CreateTaskInput, FocusHistoryPage, FocusHistoryQuery,
+    FocusSession, FocusState, FocusStats, LearningEdge, LearningNode, LearningPack,
+    LearningResource, SyncConflict, SyncSettings, SyncState, Tag, Task, TaskList,
+    UpdateAppSettingsInput, UpdateLearningResourceInput, UpdateTaskInput, UpsertLearningNodeInput,
 };
+use crate::sync_clock::HybridClock;
 
 const ACCENT: &str = "#c96442";
 const SUCCESS: &str = "#247a48";
@@ -54,6 +55,46 @@ fn parse_json<T: serde::de::DeserializeOwned>(raw: &str, fallback: T) -> T {
 
 fn bool_from_i64(value: i64) -> bool {
     value != 0
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum VectorRelation {
+    Equal,
+    LocalDominates,
+    RemoteDominates,
+    Concurrent,
+}
+
+fn row_version(row: &Map<String, Value>) -> HashMap<String, u64> {
+    let mut vector = row
+        .get("version_vector")
+        .and_then(Value::as_str)
+        .and_then(|raw| serde_json::from_str::<HashMap<String, u64>>(raw).ok())
+        .unwrap_or_default();
+    if vector.is_empty()
+        && let Some(device) = row.get("device_id").and_then(Value::as_str)
+        && !device.is_empty()
+    {
+        let revision = row.get("revision").and_then(Value::as_u64).unwrap_or(1);
+        vector.insert(device.to_string(), revision.max(1));
+    }
+    vector
+}
+
+fn compare_vectors(local: &HashMap<String, u64>, remote: &HashMap<String, u64>) -> VectorRelation {
+    let devices = local.keys().chain(remote.keys()).collect::<HashSet<_>>();
+    let local_ge = devices.iter().all(|device| {
+        local.get(*device).copied().unwrap_or(0) >= remote.get(*device).copied().unwrap_or(0)
+    });
+    let remote_ge = devices.iter().all(|device| {
+        remote.get(*device).copied().unwrap_or(0) >= local.get(*device).copied().unwrap_or(0)
+    });
+    match (local_ge, remote_ge) {
+        (true, true) => VectorRelation::Equal,
+        (true, false) => VectorRelation::LocalDominates,
+        (false, true) => VectorRelation::RemoteDominates,
+        (false, false) => VectorRelation::Concurrent,
+    }
 }
 
 fn clean_text(value: &str, max: usize) -> String {
@@ -120,6 +161,7 @@ pub struct Database {
     connection: Mutex<Connection>,
     backup_dir: PathBuf,
     device_id: String,
+    clock: Mutex<HybridClock>,
 }
 
 impl Database {
@@ -154,11 +196,17 @@ impl Database {
             .parent()
             .unwrap_or_else(|| Path::new("."))
             .join("backups");
+        let clock_path = backup_dir
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join("hlc-state.json");
         let mut database = Self {
             connection: Mutex::new(connection),
             backup_dir,
             device_id: String::new(),
+            clock: Mutex::new(HybridClock::load(clock_path.clone(), String::new())),
         };
+        database.backup_before_v3_migration()?;
         database.migrate()?;
         database.ensure_defaults()?;
         database.device_id = database.setting("deviceId", String::new())?;
@@ -166,9 +214,9 @@ impl Database {
             database.device_id = Uuid::new_v4().to_string();
             database.set_setting("deviceId", &database.device_id)?;
         }
+        database.clock = Mutex::new(HybridClock::load(clock_path, database.device_id.clone()));
         database.recover_interrupted_work()?;
         database.import_legacy_sessions(&legacy_json_paths)?;
-        database.seed_onboarding_tasks()?;
         Ok(database)
     }
 
@@ -238,6 +286,12 @@ impl Database {
             CREATE TABLE IF NOT EXISTS task_tags (
               task_id TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
               tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+              updated_at TEXT NOT NULL DEFAULT '',
+              revision INTEGER NOT NULL DEFAULT 1,
+              device_id TEXT NOT NULL DEFAULT '',
+              hlc TEXT NOT NULL DEFAULT '',
+              version_vector TEXT NOT NULL DEFAULT '{}',
+              tombstone INTEGER NOT NULL DEFAULT 0,
               PRIMARY KEY(task_id, tag_id)
             );
 
@@ -261,7 +315,12 @@ impl Database {
             CREATE TABLE IF NOT EXISTS settings (
               key TEXT PRIMARY KEY,
               value TEXT NOT NULL,
-              updated_at TEXT NOT NULL
+              updated_at TEXT NOT NULL,
+              revision INTEGER NOT NULL DEFAULT 1,
+              device_id TEXT NOT NULL DEFAULT '',
+              hlc TEXT NOT NULL DEFAULT '',
+              version_vector TEXT NOT NULL DEFAULT '{}',
+              tombstone INTEGER NOT NULL DEFAULT 0
             );
 
             CREATE TABLE IF NOT EXISTS learning_packs (
@@ -361,7 +420,16 @@ impl Database {
             "#,
         )?;
 
-        for table in ["lists", "tasks", "tags", "focus_sessions"] {
+        for table in [
+            "lists",
+            "tasks",
+            "tags",
+            "focus_sessions",
+            "learning_packs",
+            "learning_resources",
+            "learning_nodes",
+            "learning_edges",
+        ] {
             Self::ensure_column(&connection, table, "revision", "INTEGER NOT NULL DEFAULT 1")?;
             Self::ensure_column(&connection, table, "device_id", "TEXT NOT NULL DEFAULT ''")?;
             Self::ensure_column(&connection, table, "hlc", "TEXT NOT NULL DEFAULT ''")?;
@@ -371,7 +439,54 @@ impl Database {
                 "tombstone",
                 "INTEGER NOT NULL DEFAULT 0",
             )?;
+            Self::ensure_column(
+                &connection,
+                table,
+                "version_vector",
+                "TEXT NOT NULL DEFAULT '{}'",
+            )?;
         }
+        for (column, declaration) in [
+            ("updated_at", "TEXT NOT NULL DEFAULT ''"),
+            ("revision", "INTEGER NOT NULL DEFAULT 1"),
+            ("device_id", "TEXT NOT NULL DEFAULT ''"),
+            ("hlc", "TEXT NOT NULL DEFAULT ''"),
+            ("version_vector", "TEXT NOT NULL DEFAULT '{}'"),
+            ("tombstone", "INTEGER NOT NULL DEFAULT 0"),
+        ] {
+            Self::ensure_column(&connection, "task_tags", column, declaration)?;
+        }
+        for (column, declaration) in [
+            ("revision", "INTEGER NOT NULL DEFAULT 1"),
+            ("device_id", "TEXT NOT NULL DEFAULT ''"),
+            ("hlc", "TEXT NOT NULL DEFAULT ''"),
+            ("version_vector", "TEXT NOT NULL DEFAULT '{}'"),
+            ("tombstone", "INTEGER NOT NULL DEFAULT 0"),
+        ] {
+            Self::ensure_column(&connection, "settings", column, declaration)?;
+        }
+        connection.pragma_update(None, "user_version", 3)?;
+        Ok(())
+    }
+
+    fn backup_before_v3_migration(&self) -> Result<()> {
+        let connection = self.connection.lock();
+        let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+        let has_tasks: bool = connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'tasks')",
+            [],
+            |row| row.get(0),
+        )?;
+        if version >= 3 || !has_tasks {
+            return Ok(());
+        }
+        fs::create_dir_all(&self.backup_dir)?;
+        let target_path = self
+            .backup_dir
+            .join(format!("nudge-pre-v3-{}.db", Utc::now().timestamp_millis()));
+        let mut target = Connection::open(target_path)?;
+        let backup = Backup::new(&connection, &mut target)?;
+        backup.run_to_completion(128, Duration::from_millis(10), None)?;
         Ok(())
     }
 
@@ -494,23 +609,66 @@ impl Database {
     }
 
     pub fn set_setting<T: serde::Serialize>(&self, key: &str, value: &T) -> Result<()> {
-        self.connection.lock().execute(
-            r#"INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
-               ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"#,
-            params![key, serde_json::to_string(value)?, now_iso()],
+        let connection = self.connection.lock();
+        let timestamp = now_iso();
+        let hlc = self.hlc();
+        connection.execute(
+            r#"INSERT INTO settings (key, value, updated_at, revision, device_id, hlc, tombstone)
+               VALUES (?, ?, ?, 1, ?, ?, 0)
+               ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at,
+                 revision = settings.revision + 1, device_id = excluded.device_id, hlc = excluded.hlc,
+                 tombstone = 0"#,
+            params![key, serde_json::to_string(value)?, timestamp, self.device_id, hlc],
         )?;
+        if self.device_id.is_empty() || !Self::portable_setting(key) {
+            return Ok(());
+        }
+        self.bump_version(&connection, "settings", "key", key)?;
+        self.queue_change_only(&connection, "settings", key)?;
         Ok(())
     }
 
     fn hlc(&self) -> String {
-        format!(
-            "{:013}-0000-{}",
-            Utc::now().timestamp_millis(),
-            self.device_id
+        self.clock.lock().tick()
+    }
+
+    fn portable_setting(key: &str) -> bool {
+        matches!(
+            key,
+            "dailyGoalMinutes"
+                | "longTermGoalHours"
+                | "longTermGoalLabel"
+                | "pomodoroFocusMinutes"
+                | "pomodoroBreakMinutes"
         )
     }
 
-    fn queue_change(
+    fn bump_version(
+        &self,
+        connection: &Connection,
+        table: &str,
+        key_column: &str,
+        entity_id: &str,
+    ) -> Result<()> {
+        let raw: Option<String> = connection
+            .query_row(
+                &format!("SELECT version_vector FROM {table} WHERE {key_column} = ?"),
+                [entity_id],
+                |row| row.get(0),
+            )
+            .optional()?;
+        let mut vector = raw
+            .and_then(|value| serde_json::from_str::<HashMap<String, u64>>(&value).ok())
+            .unwrap_or_default();
+        *vector.entry(self.device_id.clone()).or_default() += 1;
+        connection.execute(
+            &format!("UPDATE {table} SET version_vector = ? WHERE {key_column} = ?"),
+            params![serde_json::to_string(&vector)?, entity_id],
+        )?;
+        Ok(())
+    }
+
+    fn queue_change_only(
         &self,
         connection: &Connection,
         entity_type: &str,
@@ -527,6 +685,16 @@ impl Database {
             ],
         )?;
         Ok(())
+    }
+
+    fn queue_change(
+        &self,
+        connection: &Connection,
+        entity_type: &str,
+        entity_id: &str,
+    ) -> Result<()> {
+        self.bump_version(connection, entity_type, "id", entity_id)?;
+        self.queue_change_only(connection, entity_type, entity_id)
     }
 
     pub fn pending_sync_changes(&self) -> Result<i64> {
@@ -765,7 +933,8 @@ impl Database {
 
         let mut tag_statement = connection.prepare(
             r#"SELECT tt.task_id, t.id, t.name, t.color FROM task_tags tt
-               JOIN tags t ON t.id = tt.tag_id WHERE t.tombstone = 0 ORDER BY t.name"#,
+               JOIN tags t ON t.id = tt.tag_id
+               WHERE tt.tombstone = 0 AND t.tombstone = 0 ORDER BY t.name"#,
         )?;
         let tag_rows = tag_statement
             .query_map([], |row| {
@@ -1053,7 +1222,6 @@ impl Database {
         task_id: &str,
         names: &[String],
     ) -> Result<()> {
-        connection.execute("DELETE FROM task_tags WHERE task_id = ?", [task_id])?;
         let colors = [ACCENT, SUCCESS, INFO, WARNING, MAUVE];
         let clean_names = names
             .iter()
@@ -1063,27 +1231,102 @@ impl Database {
             .into_iter()
             .take(8)
             .collect::<Vec<_>>();
+        let mut desired = HashSet::new();
         for (index, name) in clean_names.iter().enumerate() {
             let existing = connection
                 .query_row(
-                    "SELECT id FROM tags WHERE name = ? COLLATE NOCASE",
+                    "SELECT id, tombstone FROM tags WHERE name = ? COLLATE NOCASE",
                     [name],
-                    |row| row.get::<_, String>(0),
+                    |row| Ok((row.get::<_, String>(0)?, bool_from_i64(row.get(1)?))),
                 )
                 .optional()?;
-            let tag_id = existing.unwrap_or_else(|| Uuid::new_v4().to_string());
+            let (tag_id, tag_changed) = match existing {
+                Some((id, false)) => (id, false),
+                Some((id, true)) => {
+                    connection.execute(
+                        "UPDATE tags SET tombstone = 0, revision = revision + 1, device_id = ?, hlc = ? WHERE id = ?",
+                        params![self.device_id, self.hlc(), id],
+                    )?;
+                    (id, true)
+                }
+                None => {
+                    let id = Uuid::new_v4().to_string();
+                    connection.execute(
+                        r#"INSERT INTO tags (id, name, color, created_at, revision, device_id, hlc, tombstone)
+                           VALUES (?, ?, ?, ?, 1, ?, ?, 0)"#,
+                        params![id, name, colors[index % colors.len()], now_iso(), self.device_id, self.hlc()],
+                    )?;
+                    (id, true)
+                }
+            };
+            if tag_changed {
+                self.queue_change(connection, "tags", &tag_id)?;
+            }
+            desired.insert(tag_id);
+        }
+
+        let existing_links = {
+            let mut statement =
+                connection.prepare("SELECT tag_id, tombstone FROM task_tags WHERE task_id = ?")?;
+            statement
+                .query_map([task_id], |row| {
+                    Ok((row.get::<_, String>(0)?, bool_from_i64(row.get(1)?)))
+                })?
+                .collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        for (tag_id, tombstone) in &existing_links {
+            let should_exist = desired.contains(tag_id);
+            if should_exist == !*tombstone {
+                continue;
+            }
             connection.execute(
-                r#"INSERT OR IGNORE INTO tags (id, name, color, created_at, revision, device_id, hlc, tombstone)
-                   VALUES (?, ?, ?, ?, 1, ?, ?, 0)"#,
-                params![tag_id, name, colors[index % colors.len()], now_iso(), self.device_id, self.hlc()],
+                r#"UPDATE task_tags SET tombstone = ?, updated_at = ?, revision = revision + 1,
+                   device_id = ?, hlc = ? WHERE task_id = ? AND tag_id = ?"#,
+                params![
+                    (!should_exist) as i64,
+                    now_iso(),
+                    self.device_id,
+                    self.hlc(),
+                    task_id,
+                    tag_id
+                ],
             )?;
+            self.queue_task_tag_change(connection, task_id, tag_id)?;
+        }
+        let known = existing_links
+            .into_iter()
+            .map(|(tag_id, _)| tag_id)
+            .collect::<HashSet<_>>();
+        for tag_id in desired.difference(&known) {
             connection.execute(
-                "INSERT OR IGNORE INTO task_tags (task_id, tag_id) VALUES (?, ?)",
-                params![task_id, tag_id],
+                r#"INSERT INTO task_tags
+                   (task_id, tag_id, updated_at, revision, device_id, hlc, version_vector, tombstone)
+                   VALUES (?, ?, ?, 1, ?, ?, '{}', 0)"#,
+                params![task_id, tag_id, now_iso(), self.device_id, self.hlc()],
             )?;
-            self.queue_change(connection, "tags", &tag_id)?;
+            self.queue_task_tag_change(connection, task_id, tag_id)?;
         }
         Ok(())
+    }
+
+    fn queue_task_tag_change(
+        &self,
+        connection: &Connection,
+        task_id: &str,
+        tag_id: &str,
+    ) -> Result<()> {
+        let raw: String = connection.query_row(
+            "SELECT version_vector FROM task_tags WHERE task_id = ? AND tag_id = ?",
+            params![task_id, tag_id],
+            |row| row.get(0),
+        )?;
+        let mut vector = serde_json::from_str::<HashMap<String, u64>>(&raw).unwrap_or_default();
+        *vector.entry(self.device_id.clone()).or_default() += 1;
+        connection.execute(
+            "UPDATE task_tags SET version_vector = ? WHERE task_id = ? AND tag_id = ?",
+            params![serde_json::to_string(&vector)?, task_id, tag_id],
+        )?;
+        self.queue_change_only(connection, "task_tags", &format!("{task_id}:{tag_id}"))
     }
 
     pub fn add_focus_session(&self, mut session: FocusSession) -> Result<FocusSession> {
@@ -1179,6 +1422,44 @@ impl Database {
         })
     }
 
+    pub fn get_focus_history(&self, query: FocusHistoryQuery) -> Result<FocusHistoryPage> {
+        let limit = query.limit.unwrap_or(40).clamp(1, 100);
+        let offset = query
+            .cursor
+            .as_deref()
+            .unwrap_or("0")
+            .parse::<i64>()
+            .unwrap_or(0)
+            .max(0);
+        let cutoff = match query.range.as_deref().unwrap_or("7d") {
+            "7d" => Some(Utc::now() - chrono::Duration::days(7)),
+            "30d" => Some(Utc::now() - chrono::Duration::days(30)),
+            "all" => None,
+            _ => bail!("专注历史范围无效"),
+        }
+        .map(|value| value.to_rfc3339_opts(chrono::SecondsFormat::Millis, true));
+        let connection = self.connection.lock();
+        let total: i64 = connection.query_row(
+            "SELECT COUNT(*) FROM focus_sessions WHERE tombstone = 0 AND (?1 IS NULL OR started_at >= ?1)",
+            [cutoff.as_deref()],
+            |row| row.get(0),
+        )?;
+        let mut statement = connection.prepare(
+            r#"SELECT id, task_id, mode, started_at, ended_at, duration_seconds, note, source, source_key
+               FROM focus_sessions WHERE tombstone = 0 AND (?1 IS NULL OR started_at >= ?1)
+               ORDER BY started_at DESC LIMIT ?2 OFFSET ?3"#,
+        )?;
+        let items = statement
+            .query_map(params![cutoff, limit, offset], Self::map_focus_row)?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let next_offset = offset + items.len() as i64;
+        Ok(FocusHistoryPage {
+            items,
+            next_cursor: (next_offset < total).then(|| next_offset.to_string()),
+            total,
+        })
+    }
+
     pub fn due_reminders(&self) -> Result<Vec<(String, String, String)>> {
         let connection = self.connection.lock();
         let mut statement = connection.prepare(
@@ -1198,56 +1479,6 @@ impl Database {
             params![now_iso(), id],
         )?;
         Ok(())
-    }
-
-    fn seed_onboarding_tasks(&self) -> Result<()> {
-        if self.setting("onboardingSeeded", false)? {
-            return Ok(());
-        }
-        let count: i64 =
-            self.connection
-                .lock()
-                .query_row("SELECT COUNT(*) FROM tasks", [], |row| row.get(0))?;
-        if count == 0 {
-            let today = local_date_key(Local::now());
-            self.create_task(CreateTaskInput {
-                title: "把第一件事记下来".into(),
-                notes: Some("按 Ctrl+N，或直接使用上方的快速添加。".into()),
-                list_id: Some("personal".into()),
-                parent_id: None,
-                scheduled_for: Some(today.clone()),
-                due_at: None,
-                reminder_at: None,
-                priority: Some("medium".into()),
-                estimate_minutes: Some(10),
-                tag_names: vec!["开始".into()],
-            })?;
-            self.create_task(CreateTaskInput {
-                title: "点击学习包，把任务变成可执行路线".into(),
-                notes: Some("资料、视频与路线图都能离线编辑；联网推荐始终由你主动触发。".into()),
-                list_id: Some("study".into()),
-                parent_id: None,
-                scheduled_for: Some(today.clone()),
-                due_at: None,
-                reminder_at: None,
-                priority: Some("high".into()),
-                estimate_minutes: Some(25),
-                tag_names: vec!["学习包".into()],
-            })?;
-            self.create_task(CreateTaskInput {
-                title: "开始一次 25 分钟专注".into(),
-                notes: Some("点击任务右侧的计时按钮，专注记录会自动关联到任务。".into()),
-                list_id: Some("study".into()),
-                parent_id: None,
-                scheduled_for: Some(today),
-                due_at: None,
-                reminder_at: None,
-                priority: Some("none".into()),
-                estimate_minutes: Some(25),
-                tag_names: vec!["专注".into()],
-            })?;
-        }
-        self.set_setting("onboardingSeeded", &true)
     }
 
     fn import_legacy_sessions(&self, paths: &[PathBuf]) -> Result<()> {
@@ -2239,7 +2470,7 @@ impl Database {
             data.insert(key.into(), Value::Array(rows));
         }
         Ok(json!({
-            "schemaVersion": 2,
+            "schemaVersion": 3,
             "exportedAt": now_iso(),
             "data": Value::Object(data)
         }))
@@ -2306,7 +2537,7 @@ impl Database {
             .get("schemaVersion")
             .and_then(Value::as_i64)
             .unwrap_or(1);
-        if !(1..=2).contains(&version) {
+        if !(1..=3).contains(&version) {
             bail!("暂不支持这个版本的 Nudge 备份");
         }
         let data = payload
@@ -2410,6 +2641,13 @@ impl Database {
     }
 
     pub fn merge_sync_snapshot(&self, payload: &Value) -> Result<()> {
+        let version = payload
+            .get("schemaVersion")
+            .and_then(Value::as_i64)
+            .unwrap_or(1);
+        if !(1..=3).contains(&version) {
+            bail!("远端同步数据版本不受支持");
+        }
         let data = payload
             .get("data")
             .and_then(Value::as_object)
@@ -2423,6 +2661,7 @@ impl Database {
             ("learningResources", "learning_resources", "id"),
             ("learningNodes", "learning_nodes", "id"),
             ("learningEdges", "learning_edges", "id"),
+            ("settings", "settings", "key"),
         ];
         let mut connection = self.connection.lock();
         let transaction = connection.transaction()?;
@@ -2436,32 +2675,118 @@ impl Database {
                 let Some(id) = remote.get(key_column).and_then(Value::as_str) else {
                     continue;
                 };
+                if table == "settings" && !Self::portable_setting(id) {
+                    continue;
+                }
                 let remote_hlc = remote
                     .get("hlc")
                     .and_then(Value::as_str)
                     .unwrap_or_default();
+                self.clock.lock().observe(remote_hlc);
+                let mut normalized_remote = remote.clone();
+                normalized_remote.insert(
+                    "version_vector".into(),
+                    Value::String(serde_json::to_string(&row_version(remote))?),
+                );
                 let local = Self::export_row_by_id(&transaction, table, key_column, id)?;
-                let local_hlc = local
-                    .as_ref()
-                    .and_then(|row| row.get("hlc"))
+                let Some(local_payload) = local else {
+                    Self::upsert_json_row(
+                        &transaction,
+                        table,
+                        key_column,
+                        &normalized_remote,
+                        &columns,
+                    )?;
+                    continue;
+                };
+                let relation = compare_vectors(
+                    &row_version(&local_payload),
+                    &row_version(&normalized_remote),
+                );
+                if relation == VectorRelation::RemoteDominates {
+                    Self::upsert_json_row(
+                        &transaction,
+                        table,
+                        key_column,
+                        &normalized_remote,
+                        &columns,
+                    )?;
+                    continue;
+                }
+                if relation == VectorRelation::LocalDominates || local_payload == normalized_remote
+                {
+                    continue;
+                }
+                transaction.execute(
+                    "INSERT INTO sync_conflicts (id, entity_type, entity_id, local_payload, remote_payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+                    params![Uuid::new_v4().to_string(), table, id, Value::Object(local_payload.clone()).to_string(), Value::Object(normalized_remote.clone()).to_string(), now_iso()],
+                )?;
+                let local_hlc = local_payload
+                    .get("hlc")
                     .and_then(Value::as_str)
                     .unwrap_or_default();
-                if local.is_none() || remote_hlc > local_hlc {
-                    Self::upsert_json_row(&transaction, table, key_column, remote, &columns)?;
-                } else if remote_hlc == local_hlc {
-                    if let Some(local_payload) = local.filter(|row| row != remote) {
-                        transaction.execute(
-                            "INSERT INTO sync_conflicts (id, entity_type, entity_id, local_payload, remote_payload, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-                            params![Uuid::new_v4().to_string(), table, id, Value::Object(local_payload).to_string(), Value::Object(remote.clone()).to_string(), now_iso()],
-                        )?;
-                    }
+                let local_device = local_payload
+                    .get("device_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                let remote_device = normalized_remote
+                    .get("device_id")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                if (remote_hlc, remote_device) > (local_hlc, local_device) {
+                    Self::upsert_json_row(
+                        &transaction,
+                        table,
+                        key_column,
+                        &normalized_remote,
+                        &columns,
+                    )?;
                 }
             }
         }
         if let Some(task_tags) = data.get("taskTags").and_then(Value::as_array) {
-            for row in task_tags.iter().filter_map(Value::as_object) {
-                let columns = Self::table_columns(&transaction, "task_tags")?;
-                let _ = Self::insert_json_row(&transaction, "task_tags", row, &columns, true)?;
+            let columns = Self::table_columns(&transaction, "task_tags")?;
+            for remote in task_tags.iter().filter_map(Value::as_object) {
+                let (Some(task_id), Some(tag_id)) = (
+                    remote.get("task_id").and_then(Value::as_str),
+                    remote.get("tag_id").and_then(Value::as_str),
+                ) else {
+                    continue;
+                };
+                let remote_hlc = remote
+                    .get("hlc")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                self.clock.lock().observe(remote_hlc);
+                let mut normalized_remote = remote.clone();
+                normalized_remote.insert(
+                    "version_vector".into(),
+                    Value::String(serde_json::to_string(&row_version(remote))?),
+                );
+                let local = Self::export_task_tag(&transaction, task_id, tag_id)?;
+                let replace = match local.as_ref() {
+                    None => true,
+                    Some(local) => {
+                        let relation =
+                            compare_vectors(&row_version(local), &row_version(&normalized_remote));
+                        if relation == VectorRelation::Concurrent
+                            || (relation == VectorRelation::Equal && local != &normalized_remote)
+                        {
+                            transaction.execute(
+                                "INSERT INTO sync_conflicts (id, entity_type, entity_id, local_payload, remote_payload, created_at) VALUES (?, 'task_tags', ?, ?, ?, ?)",
+                                params![Uuid::new_v4().to_string(), format!("{task_id}:{tag_id}"), Value::Object(local.clone()).to_string(), Value::Object(normalized_remote.clone()).to_string(), now_iso()],
+                            )?;
+                        }
+                        relation == VectorRelation::RemoteDominates
+                            || ((relation == VectorRelation::Concurrent
+                                || relation == VectorRelation::Equal)
+                                && remote_hlc
+                                    > local.get("hlc").and_then(Value::as_str).unwrap_or_default())
+                    }
+                };
+                if replace {
+                    Self::upsert_task_tag(&transaction, &normalized_remote, &columns)?;
+                }
             }
         }
         transaction.commit()?;
@@ -2503,6 +2828,74 @@ impl Database {
             })
             .optional()
             .map_err(Into::into)
+    }
+
+    fn export_task_tag(
+        connection: &Connection,
+        task_id: &str,
+        tag_id: &str,
+    ) -> Result<Option<Map<String, Value>>> {
+        let mut statement =
+            connection.prepare("SELECT * FROM task_tags WHERE task_id = ? AND tag_id = ?")?;
+        let columns = statement
+            .column_names()
+            .iter()
+            .map(|name| name.to_string())
+            .collect::<Vec<_>>();
+        statement
+            .query_row(params![task_id, tag_id], |row| {
+                let mut object = Map::new();
+                for (index, name) in columns.iter().enumerate() {
+                    let value = match row.get_ref(index)? {
+                        ValueRef::Null => Value::Null,
+                        ValueRef::Integer(value) => Value::from(value),
+                        ValueRef::Real(value) => Value::from(value),
+                        ValueRef::Text(value) => {
+                            Value::String(String::from_utf8_lossy(value).into())
+                        }
+                        ValueRef::Blob(value) => Value::String(base64::Engine::encode(
+                            &base64::engine::general_purpose::STANDARD,
+                            value,
+                        )),
+                    };
+                    object.insert(name.clone(), value);
+                }
+                Ok(object)
+            })
+            .optional()
+            .map_err(Into::into)
+    }
+
+    fn upsert_task_tag(
+        transaction: &Transaction<'_>,
+        object: &Map<String, Value>,
+        columns: &HashSet<String>,
+    ) -> Result<()> {
+        let mut names = object
+            .keys()
+            .filter(|key| columns.contains(*key))
+            .cloned()
+            .collect::<Vec<_>>();
+        names.sort();
+        let values = names
+            .iter()
+            .map(|name| Self::json_to_sql(object.get(name).unwrap_or(&Value::Null)))
+            .collect::<Vec<_>>();
+        let assignments = names
+            .iter()
+            .filter(|name| !matches!(name.as_str(), "task_id" | "tag_id"))
+            .map(|name| format!("{name} = excluded.{name}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let placeholders = (0..names.len()).map(|_| "?").collect::<Vec<_>>().join(", ");
+        transaction.execute(
+            &format!(
+                "INSERT INTO task_tags ({}) VALUES ({placeholders}) ON CONFLICT(task_id, tag_id) DO UPDATE SET {assignments}",
+                names.join(", ")
+            ),
+            rusqlite::params_from_iter(values),
+        )?;
+        Ok(())
     }
 
     fn upsert_json_row(
@@ -2575,7 +2968,38 @@ impl Database {
             let mut connection = self.connection.lock();
             let transaction = connection.transaction()?;
             let columns = Self::table_columns(&transaction, &conflict.entity_type)?;
-            Self::upsert_json_row(&transaction, &conflict.entity_type, "id", object, &columns)?;
+            if conflict.entity_type == "task_tags" {
+                Self::upsert_task_tag(&transaction, object, &columns)?;
+                let task_id = object
+                    .get("task_id")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| anyhow!("标签关联冲突内容无效"))?;
+                let tag_id = object
+                    .get("tag_id")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| anyhow!("标签关联冲突内容无效"))?;
+                self.queue_task_tag_change(&transaction, task_id, tag_id)?;
+            } else {
+                let key_column = if conflict.entity_type == "settings" {
+                    "key"
+                } else {
+                    "id"
+                };
+                Self::upsert_json_row(
+                    &transaction,
+                    &conflict.entity_type,
+                    key_column,
+                    object,
+                    &columns,
+                )?;
+                self.bump_version(
+                    &transaction,
+                    &conflict.entity_type,
+                    key_column,
+                    &conflict.entity_id,
+                )?;
+                self.queue_change_only(&transaction, &conflict.entity_type, &conflict.entity_id)?;
+            }
             transaction.commit()?;
         } else if choice == "keep-both" && conflict.entity_type == "tasks" {
             if let Some(mut object) = conflict.remote_payload.as_object().cloned() {
@@ -2596,7 +3020,37 @@ impl Database {
                 self.queue_change(&transaction, "tasks", &new_id)?;
                 transaction.commit()?;
             }
-        } else if choice != "local" {
+        } else if choice == "local" {
+            let connection = self.connection.lock();
+            if conflict.entity_type == "task_tags" {
+                let local = conflict
+                    .local_payload
+                    .as_object()
+                    .ok_or_else(|| anyhow!("本机标签关联冲突内容无效"))?;
+                let task_id = local
+                    .get("task_id")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| anyhow!("本机标签关联冲突内容无效"))?;
+                let tag_id = local
+                    .get("tag_id")
+                    .and_then(Value::as_str)
+                    .ok_or_else(|| anyhow!("本机标签关联冲突内容无效"))?;
+                self.queue_task_tag_change(&connection, task_id, tag_id)?;
+            } else {
+                let key_column = if conflict.entity_type == "settings" {
+                    "key"
+                } else {
+                    "id"
+                };
+                self.bump_version(
+                    &connection,
+                    &conflict.entity_type,
+                    key_column,
+                    &conflict.entity_id,
+                )?;
+                self.queue_change_only(&connection, &conflict.entity_type, &conflict.entity_id)?;
+            }
+        } else {
             bail!("冲突处理方式无效");
         }
         self.connection.lock().execute(
@@ -2615,6 +3069,7 @@ impl Database {
                 username: String::new(),
                 remote_path: "Nudge/nudge-v2.enc".into(),
                 remember_passphrase: false,
+                sync_v3_confirmed: false,
                 has_credentials: false,
                 device_id: self.device_id.clone(),
                 device_name: hostname::get()
@@ -2653,11 +3108,111 @@ mod tests {
         (root.join("nudge.db"), root)
     }
 
+    fn create_test_task(database: &Database, title: &str) -> Task {
+        database
+            .create_task(CreateTaskInput {
+                title: title.into(),
+                notes: None,
+                list_id: Some("inbox".into()),
+                parent_id: None,
+                scheduled_for: None,
+                due_at: None,
+                reminder_at: None,
+                priority: Some("none".into()),
+                estimate_minutes: None,
+                tag_names: vec![],
+            })
+            .unwrap()
+    }
+
+    #[test]
+    fn fresh_database_starts_without_demo_tasks() {
+        let (path, root) = temporary_database("empty");
+        let database = Database::open(path, None, vec![]).unwrap();
+        assert!(database.list_tasks().unwrap().is_empty());
+        drop(database);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn version_vectors_detect_order_and_concurrency() {
+        let vector = |entries: &[(&str, u64)]| {
+            entries
+                .iter()
+                .map(|(device, revision)| ((*device).to_string(), *revision))
+                .collect::<HashMap<_, _>>()
+        };
+
+        assert_eq!(
+            compare_vectors(&vector(&[("a", 2)]), &vector(&[("a", 2)])),
+            VectorRelation::Equal
+        );
+        assert_eq!(
+            compare_vectors(&vector(&[("a", 3), ("b", 1)]), &vector(&[("a", 2)])),
+            VectorRelation::LocalDominates
+        );
+        assert_eq!(
+            compare_vectors(&vector(&[("a", 1)]), &vector(&[("a", 2), ("b", 1)])),
+            VectorRelation::RemoteDominates
+        );
+        assert_eq!(
+            compare_vectors(&vector(&[("a", 2)]), &vector(&[("b", 2)])),
+            VectorRelation::Concurrent
+        );
+    }
+
+    #[test]
+    fn concurrent_remote_task_tag_tombstone_creates_conflict_and_wins_by_hlc() {
+        let (path, root) = temporary_database("task-tag-tombstone");
+        let database = Database::open(path, None, vec![]).unwrap();
+        let task = database
+            .create_task(CreateTaskInput {
+                title: "同步标签".into(),
+                notes: None,
+                list_id: Some("inbox".into()),
+                parent_id: None,
+                scheduled_for: None,
+                due_at: None,
+                reminder_at: None,
+                priority: Some("none".into()),
+                estimate_minutes: None,
+                tag_names: vec!["Rust".into()],
+            })
+            .unwrap();
+        let snapshot = database.export_sync_snapshot().unwrap();
+        let mut remote_link = snapshot["data"]["taskTags"][0].as_object().unwrap().clone();
+        remote_link.insert("tombstone".into(), Value::from(1));
+        remote_link.insert("revision".into(), Value::from(2));
+        remote_link.insert("device_id".into(), Value::String("remote".into()));
+        remote_link.insert(
+            "hlc".into(),
+            Value::String("9999999999999-0000000001-remote".into()),
+        );
+        remote_link.insert(
+            "version_vector".into(),
+            Value::String(r#"{"remote":1}"#.into()),
+        );
+
+        database
+            .merge_sync_snapshot(&json!({
+                "schemaVersion": 3,
+                "data": { "taskTags": [Value::Object(remote_link)] }
+            }))
+            .unwrap();
+
+        assert!(database.get_task(&task.id).unwrap().tags.is_empty());
+        let conflicts = database.list_conflicts().unwrap();
+        assert_eq!(conflicts.len(), 1);
+        assert_eq!(conflicts[0].entity_type, "task_tags");
+        drop(database);
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[test]
     fn offline_learning_pack_is_idempotent_and_acyclic() {
         let (path, root) = temporary_database("learning");
         let database = Database::open(path, None, vec![]).unwrap();
-        let task = database.list_tasks().unwrap().into_iter().next().unwrap();
+        let task = create_test_task(&database, "学习 Rust");
         let first = database.ensure_learning_pack(&task.id).unwrap();
         let second = database.ensure_learning_pack(&task.id).unwrap();
         assert_eq!(first.id, second.id);
@@ -2674,7 +3229,7 @@ mod tests {
     fn deleted_roadmap_node_and_edge_can_be_restored_for_undo() {
         let (path, root) = temporary_database("roadmap-undo");
         let database = Database::open(path, None, vec![]).unwrap();
-        let task = database.list_tasks().unwrap().into_iter().next().unwrap();
+        let task = create_test_task(&database, "梳理路线图");
         let pack = database.ensure_learning_pack(&task.id).unwrap();
         let edge = pack.edges[0].clone();
         let node = pack
@@ -2711,12 +3266,13 @@ mod tests {
     }
 
     #[test]
-    fn v2_backup_round_trip_keeps_learning_data() {
+    fn v3_backup_round_trip_keeps_learning_data() {
         let (source_path, source_root) = temporary_database("export");
         let source = Database::open(source_path, None, vec![]).unwrap();
-        let task = source.list_tasks().unwrap().into_iter().next().unwrap();
+        let task = create_test_task(&source, "备份学习包");
         source.ensure_learning_pack(&task.id).unwrap();
         let backup = source.export_json().unwrap();
+        assert_eq!(backup["schemaVersion"], 3);
 
         let (target_path, target_root) = temporary_database("import");
         let target = Database::open(target_path, None, vec![]).unwrap();
@@ -2726,5 +3282,28 @@ mod tests {
         drop(target);
         let _ = fs::remove_dir_all(source_root);
         let _ = fs::remove_dir_all(target_root);
+    }
+
+    #[test]
+    fn v1_v2_and_v3_backups_import_idempotently() {
+        let (source_path, source_root) = temporary_database("compat-export");
+        let source = Database::open(source_path, None, vec![]).unwrap();
+        let task = create_test_task(&source, "兼容旧备份");
+        let exported = source.export_json().unwrap();
+
+        for version in 1..=3 {
+            let (target_path, target_root) = temporary_database(&format!("compat-v{version}"));
+            let target = Database::open(target_path, None, vec![]).unwrap();
+            let mut backup = exported.clone();
+            backup["schemaVersion"] = Value::from(version);
+            target.import_json(backup.clone(), "merge").unwrap();
+            target.import_json(backup, "merge").unwrap();
+            assert_eq!(target.get_task(&task.id).unwrap().title, "兼容旧备份");
+            drop(target);
+            let _ = fs::remove_dir_all(target_root);
+        }
+
+        drop(source);
+        let _ = fs::remove_dir_all(source_root);
     }
 }
