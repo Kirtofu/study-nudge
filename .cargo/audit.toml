@@ -1,0 +1,9 @@
+[advisories]
+# quick-xml is pulled by plist/tauri-utils and only parses trusted local
+# application metadata; the vulnerable attribute paths are not exposed to
+# network or user-controlled XML in Nudge. Keep this exemption until the
+# Tauri plist dependency accepts quick-xml >= 0.41.
+# glib is a GTK3 transitive dependency of the Linux Tauri runtime. Nudge does
+# not call the affected VariantStrIter APIs directly; upgrading GTK bindings
+# is controlled by the Tauri runtime release cadence.
+ignore = ["RUSTSEC-2026-0194", "RUSTSEC-2026-0195", "RUSTSEC-2024-0429"]
