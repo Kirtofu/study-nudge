@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/Kirtofu/study-nudge/actions/workflows/quality.yml"><img src="https://github.com/Kirtofu/study-nudge/actions/workflows/quality.yml/badge.svg?branch=main" alt="Quality"></a>
-  <a href="https://github.com/Kirtofu/study-nudge/releases/tag/v2.0.0"><img src="https://img.shields.io/badge/stable-v2.0.0-c96442?style=flat-square" alt="stable v2.0.0"></a>
+  <a href="https://github.com/Kirtofu/study-nudge/releases/tag/v2.1.0"><img src="https://img.shields.io/badge/stable-v2.1.0-c96442?style=flat-square" alt="stable v2.1.0"></a>
   <img src="https://img.shields.io/badge/default-local%20first-247a48?style=flat-square" alt="Local first">
 </p>
 
@@ -18,27 +18,27 @@
 
 Nudge 使用 Tauri 2、React、TypeScript、Rust 与 SQLite。输入任务后可以直接保存，也可以选择“规划并添加”，立即得到与任务绑定的学习包：资料与工具、精选视频、可编辑学习路线。应用默认不需要账号、不依赖云端，AI 推荐和 WebDAV 加密同步都由用户主动开启。
 
-当前 `v2.1-hardening` 分支正在完善安全存储、同步可靠性、启动性能和可恢复错误处理。可下载的稳定版仍为 `v2.0.0`；`v2.1.0-rc.1` 会在跨平台 CI 和迁移/同步冒烟测试通过后发布。
+当前稳定版为 `v2.1.0`。该版本已通过跨平台构建、迁移与同步冒烟测试。
 
 > [!IMPORTANT]
-> `v2.0.0` 是当前稳定版本。桌面包暂未接入平台签名，Android 提供测试 APK，iOS 提供 Apple Silicon 模拟器 `.app.zip`。请从 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.0.0) 下载并核对 `SHA256SUMS.txt`。
+> `v2.1.0` 是当前稳定版本。桌面包暂未接入平台签名，Android 提供测试 APK，iOS 提供 Apple Silicon 模拟器 `.app.zip`。请从 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.1.0) 下载并核对 `SHA256SUMS.txt`。
 
-## 下载 v2.0.0
+## 下载 v2.1.0
 
-所有 v2 二进制只发布到 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.0.0)，不提交到 Git 仓库。
+所有 v2 二进制只发布到 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.1.0)，不提交到 Git 仓库。
 
 | 平台 | 架构 | 发布物 | 下载 |
 | --- | --- | --- | --- |
-| Windows 10/11 | x64 | NSIS 安装版 | [Setup `.exe`](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-windows-x64-setup.exe) |
-| Windows 10/11 | x64 | 便携 ZIP | [Portable `.zip`](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-windows-x64-portable.zip) |
-| Ubuntu 22.04+ | x64 | AppImage / deb | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-linux-x64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-linux-x64.deb) |
-| Ubuntu 22.04+ | ARM64 | AppImage / deb | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-linux-arm64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-linux-arm64.deb) |
-| macOS 12+ | Intel | DMG / app ZIP | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-macos-x64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-macos-x64.app.zip) |
-| macOS 12+ | Apple Silicon | DMG / app ZIP | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-macos-arm64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-macos-arm64.app.zip) |
-| Android 10+ | ARM64 | 测试 APK | [APK](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-android-arm64-debug.apk) |
-| iOS 16+ | Apple Silicon Simulator | 模拟器 app ZIP | [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/Nudge-2.0.0-ios-simulator-arm64.app.zip) |
+| Windows 10/11 | x64 | NSIS 安装版 | [Setup `.exe`](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-windows-x64-setup.exe) |
+| Windows 10/11 | x64 | 便携 ZIP | [Portable `.zip`](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-windows-x64-portable.zip) |
+| Ubuntu 22.04+ | x64 | AppImage / deb | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-linux-x64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-linux-x64.deb) |
+| Ubuntu 22.04+ | ARM64 | AppImage / deb | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-linux-arm64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-linux-arm64.deb) |
+| macOS 12+ | Intel | DMG / app ZIP | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-macos-x64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-macos-x64.app.zip) |
+| macOS 12+ | Apple Silicon | DMG / app ZIP | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-macos-arm64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-macos-arm64.app.zip) |
+| Android 10+ | ARM64 | 测试 APK | [APK](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-android-arm64-debug.apk) |
+| iOS 16+ | Apple Silicon Simulator | 模拟器 app ZIP | [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-ios-simulator-arm64.app.zip) |
 
-[查看 SHA-256 校验文件](https://github.com/Kirtofu/study-nudge/releases/download/v2.0.0/SHA256SUMS.txt)
+[查看 SHA-256 校验文件](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/SHA256SUMS.txt)
 
 ### 平台能力矩阵
 
