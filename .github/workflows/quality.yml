@@ -2,7 +2,7 @@ name: Quality
 
 on:
   push:
-    branches: [main, v2-learning-pack, v2.1-hardening]
+    branches: [main, v2-learning-pack, v2.1-hardening, refactor/daily-workflow]
   pull_request:
     branches: [main]
 

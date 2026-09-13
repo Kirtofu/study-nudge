@@ -2924,7 +2924,7 @@ dependencies = [
 
 [[package]]
 name = "nudge"
-version = "2.1.0"
+version = "2.2.0"
 dependencies = [
  "android-native-keyring-store",
  "anyhow",

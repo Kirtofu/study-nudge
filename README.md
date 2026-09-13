@@ -10,35 +10,35 @@
 
 <p align="center">
   <a href="https://github.com/Kirtofu/study-nudge/actions/workflows/quality.yml"><img src="https://github.com/Kirtofu/study-nudge/actions/workflows/quality.yml/badge.svg?branch=main" alt="Quality"></a>
-  <a href="https://github.com/Kirtofu/study-nudge/releases/tag/v2.1.0"><img src="https://img.shields.io/badge/stable-v2.1.0-c96442?style=flat-square" alt="stable v2.1.0"></a>
+  <a href="https://github.com/Kirtofu/study-nudge/releases/tag/v2.2.0"><img src="https://img.shields.io/badge/stable-v2.2.0-c96442?style=flat-square" alt="stable v2.2.0"></a>
   <img src="https://img.shields.io/badge/default-local%20first-247a48?style=flat-square" alt="Local first">
 </p>
 
-![Nudge 桌面三栏学习包](./docs/screenshots/v2-desktop-learning-pack.png)
+![Nudge v2.2 今天与快速记录](./docs/screenshots/v2.2-today.png)
 
-Nudge 使用 Tauri 2、React、TypeScript、Rust 与 SQLite。输入任务后可以直接保存，也可以选择“规划并添加”，立即得到与任务绑定的学习包：资料与工具、精选视频、可编辑学习路线。应用默认不需要账号、不依赖云端，AI 推荐和 WebDAV 加密同步都由用户主动开启。
+Nudge 使用 Tauri 2、React、TypeScript、Rust 与 SQLite。写下一件事，按 Enter 保存并继续输入；此前安排但尚未完成的任务会留在“今天”。需要深入学习时，再从任务进入独立工作区，管理资料、视频和学习路线。应用默认不需要账号、不依赖云端，AI 推荐和 WebDAV 加密同步都由用户主动开启。
 
-当前稳定版为 `v2.1.0`。该版本已通过跨平台构建、迁移与同步冒烟测试。
+当前稳定版为 `v2.2.0`。这次重构重点是日常记录、可靠保存、可撤销操作及 Windows 使用体验。[更新记录](./docs/release-notes-v2.2.0.md) · [验证记录](./docs/validation-v2.2.0.md)。本文界面截图使用浏览器演示数据。
 
 > [!IMPORTANT]
-> `v2.1.0` 是当前稳定版本。桌面包暂未接入平台签名，Android 提供测试 APK，iOS 提供 Apple Silicon 模拟器 `.app.zip`。请从 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.1.0) 下载并核对 `SHA256SUMS.txt`。
+> `v2.2.0` 是当前稳定版本。桌面包暂未接入平台签名，Android 提供测试 APK，iOS 提供 Apple Silicon 模拟器 `.app.zip`。请从 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.2.0) 下载并核对 `SHA256SUMS.txt`。
 
-## 下载 v2.1.0
+## 下载 v2.2.0
 
-所有 v2 二进制只发布到 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.1.0)，不提交到 Git 仓库。
+所有 v2 二进制只发布到 [GitHub Release](https://github.com/Kirtofu/study-nudge/releases/tag/v2.2.0)，不提交到 Git 仓库。
 
 | 平台 | 架构 | 发布物 | 下载 |
 | --- | --- | --- | --- |
-| Windows 10/11 | x64 | NSIS 安装版 | [Setup `.exe`](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-windows-x64-setup.exe) |
-| Windows 10/11 | x64 | 便携 ZIP | [Portable `.zip`](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-windows-x64-portable.zip) |
-| Ubuntu 22.04+ | x64 | AppImage / deb | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-linux-x64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-linux-x64.deb) |
-| Ubuntu 22.04+ | ARM64 | AppImage / deb | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-linux-arm64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-linux-arm64.deb) |
-| macOS 12+ | Intel | DMG / app ZIP | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-macos-x64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-macos-x64.app.zip) |
-| macOS 12+ | Apple Silicon | DMG / app ZIP | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-macos-arm64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-macos-arm64.app.zip) |
-| Android 10+ | ARM64 | 测试 APK | [APK](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-android-arm64-debug.apk) |
-| iOS 16+ | Apple Silicon Simulator | 模拟器 app ZIP | [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/Nudge-2.1.0-ios-simulator-arm64.app.zip) |
+| Windows 10/11 | x64 | NSIS 安装版 | [Setup `.exe`](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-windows-x64-setup.exe) |
+| Windows 10/11 | x64 | 便携 ZIP | [Portable `.zip`](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-windows-x64-portable.zip) |
+| Ubuntu 22.04+ | x64 | AppImage / deb | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-linux-x64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-linux-x64.deb) |
+| Ubuntu 22.04+ | ARM64 | AppImage / deb | [AppImage](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-linux-arm64.AppImage) · [deb](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-linux-arm64.deb) |
+| macOS 12+ | Intel | DMG / app ZIP | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-macos-x64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-macos-x64.app.zip) |
+| macOS 12+ | Apple Silicon | DMG / app ZIP | [DMG](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-macos-arm64.dmg) · [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-macos-arm64.app.zip) |
+| Android 10+ | ARM64 | 测试 APK | [APK](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-android-arm64-debug.apk) |
+| iOS 16+ | Apple Silicon Simulator | 模拟器 app ZIP | [app.zip](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/Nudge-2.2.0-ios-simulator-arm64.app.zip) |
 
-[查看 SHA-256 校验文件](https://github.com/Kirtofu/study-nudge/releases/download/v2.1.0/SHA256SUMS.txt)
+[查看 SHA-256 校验文件](https://github.com/Kirtofu/study-nudge/releases/download/v2.2.0/SHA256SUMS.txt)
 
 ### 平台能力矩阵
 
@@ -54,12 +54,12 @@ Nudge 使用 Tauri 2、React、TypeScript、Rust 与 SQLite。输入任务后可
 
 ## 学习包
 
-快速输入有效任务后会出现两个动作：
+普通记录是主操作，学习规划位于次级入口：
 
-- **添加任务**：立即保存，不等待网络。
-- **规划并添加**：先本地保存任务，再展开学习包；离线模板会即时出现。
+- **添加任务 / Enter**：立即保存并继续记录，支持中文输入法、日期、清单和防重复提交。
+- **添加并规划学习**：先本地保存，再进入独立工作区。若打开失败，会明确提示任务已存在；重试只打开已有任务。
 
-已有任务行也有“学习包”按钮。鼠标环境在悬停或聚焦时显示，触摸环境始终可见；已有路线时按钮显示完成进度环。
+已有任务可以通过任务行、更多操作菜单或详情中的“打开学习工作区”进入。返回任务列表会恢复先前的滚动位置。
 
 ### 资料与工具
 
@@ -85,17 +85,19 @@ Nudge 使用 Tauri 2、React、TypeScript、Rust 与 SQLite。输入任务后可
 
 ## 多端界面
 
-桌面端在任务下方展开三栏；平板横屏采用资料与视频双栏、路线图通栏；手机和平板竖屏使用全屏工作区与三个可键盘/触摸切换的标签页。
+学习工作区占据独立页面。可用内容宽度超过 54rem 时显示资料、视频、路线三栏；较窄窗口和平板、手机使用三个可键盘切换的标签页。路线默认保持可读字号，可平移查看后续步骤，也可点击“显示全图”查看概览。
+
+![Nudge v2.2 独立学习工作区](./docs/screenshots/v2.2-learning-workspace.png)
 
 <table>
   <tr>
     <td width="34%">
-      <img src="./docs/screenshots/v2-mobile-tabs.png" alt="Nudge 手机学习包标签页">
+      <img src="./docs/screenshots/v2.2-mobile-learning.png" alt="Nudge 手机学习包标签页">
       <p align="center"><strong>手机标签页</strong><br>安全区、触摸目标与常驻学习包操作。</p>
     </td>
     <td width="33%">
-      <img src="./docs/screenshots/v2-roadmap-editor.png" alt="Nudge 可编辑学习路线图">
-      <p align="center"><strong>路线编辑器</strong><br>拖动、连接、自动布局与状态推进。</p>
+      <img src="./docs/screenshots/v2.2-mobile-today.png" alt="Nudge 手机今天与快速记录">
+      <p align="center"><strong>随手记录</strong><br>顶部搜索、日期选择与常驻专注操作。</p>
     </td>
     <td width="33%">
       <img src="./docs/screenshots/v2-sync-settings.png" alt="Nudge WebDAV 加密同步设置">
@@ -106,7 +108,7 @@ Nudge 使用 Tauri 2、React、TypeScript、Rust 与 SQLite。输入任务后可
 
 ## 默认离线，可选 AI
 
-AI 不会因为创建普通任务而自动运行。只有点击“规划并添加”“生成推荐”“重新规划”或单栏重试时才会调用配置的模型。
+创建任务和打开学习工作区都不自动调用 AI。点击“生成推荐”“重新规划”或单栏重试后，才会根据配置生成内容；联网生成仍需要确认发送范围。
 
 | 方式 | 网络 | 凭据 | 说明 |
 | --- | --- | --- | --- |
@@ -140,7 +142,7 @@ sequenceDiagram
 
 - WebDAV 服务器只看到版本、盐、随机数和密文。
 - WebDAV 凭据与记住的同步口令保存在系统密钥库，不进入导出或跨设备同步。
-- `v2.1` 同步格式使用 schema 3 和加密信封 v2；升级同步前会显示兼容提示，参与同一 WebDAV 文件的设备需全部升级到 `v2.1`。
+- `v2.2` 沿用 `v2.1` 的 schema 3 和加密信封 v2，已使用 v2.1 的设备不需要再升级格式；v2.0 设备需要先升级应用。
 - 每条同步记录包含混合逻辑时钟、设备 ID、修订号和删除墓碑。
 - 使用 ETag 条件写入；遇到 `412 Precondition Failed` 会重新下载、合并并重试。
 - 断网修改进入持久队列；并发冲突保存在“同步冲突”中，可选择本地或远端版本恢复。
@@ -152,22 +154,26 @@ sequenceDiagram
 - 收集箱、今天、计划、已完成和自定义清单。
 - 行内快速添加，支持 `#标签`、`!高`、`!中`、`!低` 快速语法。
 - 标签、优先级、计划日期、截止提醒、预计时长、备注和子任务。
-- 搜索、拖拽排序、详情抽屉与悬停快捷操作。
-- 完成任务后即时收拢，并提供 5 秒撤销。
+- 统一搜索全部任务的标题、备注与标签，已完成结果带明确标记；Ctrl+K / Ctrl+F 打开，方向键与 Enter 选择。
+- “此前未完成”保留原计划日期，跨午夜或电脑唤醒后自动刷新“今天”。
+- 拖拽只改变当前分组的次序，编辑或重启后仍保留排序。
+- 完成和删除均提供独立的 5 秒撤销；失败操作可以重试。
 
 ### 专注
 
-- 25 分钟番茄钟与自由正计时，可关联任务。
+- 可配置时长的番茄钟与自由正计时，可关联任务；所有入口显示实际配置时长。
 - 暂停、继续、跳过、停止、今日目标、长期目标、连续天数和历史记录。
 - 基于时间戳恢复，正确处理休眠、唤醒和异常退出。
+- 重复启动同一任务保留当前计时；切换前选择“保存并切换”或“继续当前专注”，上一段历史和新计时状态原子保存。
 - 桌面端支持置顶迷你窗、托盘、原生通知、开机启动和全局快速添加。
 - 移动端使用系统通知与安全区底部导航，不提供常驻迷你窗。
 
-### v2.1 体验与性能改进
+### v2.2 保存与性能改进
 
 - 启动通过一次 `app.bootstrap()` 载入任务、清单、标签、设置、专注状态、推荐配置与同步摘要。
-- 新建、编辑、完成、删除与排序只合并变动实体，并在失败时恢复操作前状态。
+- 新建、编辑、完成、删除与排序统一消费变更集；按任务串行写入，失败只回滚对应操作。
 - 详情自动保存按任务串行，合并尚未发送的字段，过期响应不会覆盖新草稿。
+- 明确显示保存中、保存失败和重试；同步、导入及另一窗口的变更会刷新相关数据，保留正在编辑的字段。
 - 设置按“通用、AI、同步、数据”分栏；切换标签不会丢失未提交内容。
 - 专注历史支持 7 天、30 天和全部范围，并按日期显示时长、模式与关联任务。
 - 首屏按需加载学习包、设置、命令面板和专注历史；CI 限制首屏 JS、CSS 与字体体积。
@@ -227,7 +233,8 @@ flowchart LR
 
 渲染层通过统一桥接调用以下 API 族：
 
-- `app.bootstrap()` 返回 `BootstrapSnapshot`，任务写入返回可局部合并的 `EntityChangeSet`。
+- `app.bootstrap()` 返回 `BootstrapSnapshot`，任务写入返回 `TaskMutationResult` / `EntityChangeSet`，排序返回 `TaskOrderPatch`。
+- `app.onDataChanged(callback)` 提供受影响的数据域及 `local` / `import` / `sync` 来源；仅刷新相关窗口数据。
 - `tasks`、`lists`、`tags`、`focus`、`settings`、`backup`、`desktop`。
 - `focus.history(query)` 返回分页专注历史。
 - `learning.get / ensure / generate / cancel`。
@@ -260,6 +267,7 @@ npm run dev
 npm run dev:web
 npm run typecheck
 npm test -- --run
+npm run test:e2e
 npm run build:web
 npm run check:bundle
 cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
@@ -272,9 +280,20 @@ cargo test --manifest-path src-tauri/Cargo.toml
 需要 Visual Studio 2022 Build Tools（Desktop development with C++）、Windows SDK 与 WebView2 Runtime。
 
 ```powershell
+. .\scripts\prepare-windows-deps.ps1
 npm run dev
 npm run build:win
 ```
+
+`build:win` 自动从 libsodium 官方 HTTPS 地址缓存安装包及 `.minisig`，并设置 `SODIUM_DIST_DIR`；依赖自身的签名验证保持启用。手动执行 Cargo 时需在同一个 PowerShell 会话先加载上述脚本。
+
+构建或安装后可运行原生冒烟测试（先退出其他 Nudge 进程）：
+
+```powershell
+node scripts/smoke-windows.cjs "D:\你的安装目录\nudge.exe"
+```
+
+测试使用 `src-tauri/target/` 下的临时数据库、独立 WebView2 目录和仅内存测试凭据，并启动本机 WebDAV 测试服务；不会读取正式数据库或系统密钥库。浏览器演示只在当前标签页保留数据，备份、真实联网 AI 与同步请使用桌面应用。
 
 ### Linux
 
@@ -343,15 +362,15 @@ npx tauri ios build --target aarch64-sim --debug --ci
 study-nudge/
 ├─ .github/workflows/       # 质量检查与跨平台发布
 ├─ docs/screenshots/        # README 应用截图
-├─ scripts/                 # Windows Android 构建兼容脚本
+├─ scripts/                 # 依赖缓存、平台构建与 Windows 原生验证
 ├─ src/
-│  ├─ renderer/             # React 界面、状态、学习包与移动布局
+│  ├─ renderer/src/         # features/ 业务界面、state/ 状态、bridge/ 原生与演示适配
 │  └─ shared/               # 前后端共享 TypeScript 类型
 ├─ src-tauri/
 │  ├─ capabilities/         # 桌面 / 移动权限边界
 │  ├─ gen/android/          # Tauri Android 工程
 │  ├─ icons/                # 全平台应用图标
-│  └─ src/                  # Rust 数据库、推荐、同步与桌面服务
+│  └─ src/                  # commands/ 与 database/ 按任务、专注、学习、设置与同步拆分
 ├─ DESIGN.md                # 界面设计系统
 ├─ PRODUCT.md               # 产品定位与设计原则
 ├─ study-nudge.ps1          # 保留的 v1 学习记录脚本

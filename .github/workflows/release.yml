@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing or new release tag
         required: true
-        default: v2.1.0-rc.1
+        default: v2.2.0
       publish:
         description: Publish or update the GitHub release after all builds pass
         required: true
@@ -76,6 +76,18 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Cache official libsodium archives and signatures
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/target/dependency-cache
+          key: libsodium-msvc-${{ hashFiles('src-tauri/Cargo.lock', 'scripts/prepare-windows-deps.ps1') }}
+
+      - name: Prepare verified Windows dependencies over HTTPS
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/prepare-windows-deps.ps1
 
       - name: Build Windows packages
         if: runner.os == 'Windows'

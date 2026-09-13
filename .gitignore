@@ -8,7 +8,8 @@ coverage/
 *.tsbuildinfo
 .DS_Store
 .vite/
-.impeccable/
+.impeccable/*
+!.impeccable/design.json
 .firecrawl/
 test-results/
 playwright-report/

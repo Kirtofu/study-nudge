@@ -1,7 +1,7 @@
 {
   "name": "nudge",
   "productName": "Nudge",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "A warm, offline-first cross-platform todo, focus, and learning planner",
   "author": "Nudge",
   "license": "MIT",
@@ -16,7 +16,7 @@
     "check:bundle": "node scripts/check-bundle-budgets.mjs",
     "test:e2e": "playwright test",
     "build": "npm run typecheck && tauri build",
-    "build:win": "npm run build -- --bundles nsis",
+    "build:win": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-windows.ps1",
     "android:init": "tauri android init --ci",
     "android:dev": "tauri android dev",
     "android:build": "tauri android build --apk --target aarch64 --ci",
