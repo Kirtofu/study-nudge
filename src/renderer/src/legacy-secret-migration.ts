@@ -1,6 +1,6 @@
+import type { SecretStoreStatus } from '@shared/types'
 import { appDataDir, join } from '@tauri-apps/api/path'
 import { Stronghold, type Client, type Store } from '@tauri-apps/plugin-stronghold'
-import type { SecretStoreStatus } from '@shared/types'
 
 const vaultPassword = 'Nudge::local-stronghold::v2'
 const vaultClient = 'nudge-secrets-v2'
@@ -8,7 +8,8 @@ const SECRET_API_KEY = 'recommendation-api-key'
 const SECRET_WEBDAV_PASSWORD = 'webdav-password'
 const SECRET_SYNC_PASSPHRASE = 'sync-passphrase'
 const decoder = new TextDecoder()
-let strongholdPromise: Promise<{ stronghold: Stronghold; client: Client; store: Store }> | null = null
+let strongholdPromise: Promise<{ stronghold: Stronghold; client: Client; store: Store }> | null =
+  null
 
 async function getSecretStore(): Promise<{ stronghold: Stronghold; client: Client; store: Store }> {
   if (!strongholdPromise) {

@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { CalendarDays, Clock3, History, LoaderCircle, Maximize2, RotateCcw, X } from 'lucide-react'
 import type { FocusHistoryPage, FocusSession } from '@shared/types'
+import { CalendarDays, Clock3, History, LoaderCircle, Maximize2, RotateCcw, X } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import { api } from '../bridge'
 import { useNudgeStore } from '../store'
 import { formatDuration } from '../utils'
@@ -18,7 +18,10 @@ function dayKey(value: string): string {
   return Number.isNaN(date.getTime()) ? value.slice(0, 10) : date.toLocaleDateString('zh-CN')
 }
 
-function findTaskTitle(tasks: ReturnType<typeof useNudgeStore.getState>['tasks'], id: string | null): string {
+function findTaskTitle(
+  tasks: ReturnType<typeof useNudgeStore.getState>['tasks'],
+  id: string | null
+): string {
   if (!id) return '未关联任务'
   const queue = [...tasks]
   while (queue.length) {
@@ -67,12 +70,25 @@ export function FocusHistoryDrawer(): React.JSX.Element {
   return (
     <aside className="detail-drawer focus-history-drawer" aria-label="专注历史">
       <div className="drawer-header">
-        <div className="save-state"><History size={14} aria-hidden="true" /><span>专注历史</span></div>
+        <div className="save-state">
+          <History size={14} aria-hidden="true" />
+          <span>专注历史</span>
+        </div>
         <div className="drawer-header-actions">
-          <button type="button" className="icon-button" aria-label="打开专注迷你窗" onClick={() => void api.desktop.toggleMiniWindow()}>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="打开专注迷你窗"
+            onClick={() => void api.desktop.toggleMiniWindow()}
+          >
             <Maximize2 size={15} aria-hidden="true" />
           </button>
-          <button type="button" className="icon-button" aria-label="关闭专注历史" onClick={closeDrawer}>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label="关闭专注历史"
+            onClick={closeDrawer}
+          >
             <X size={17} aria-hidden="true" />
           </button>
         </div>
@@ -102,34 +118,58 @@ export function FocusHistoryDrawer(): React.JSX.Element {
 
       <div className="drawer-scroll history-scroll">
         {loading ? (
-          <div className="drawer-loading" role="status"><LoaderCircle className="spin" size={18} />正在整理专注记录</div>
+          <div className="drawer-loading" role="status">
+            <LoaderCircle className="spin" size={18} />
+            正在整理专注记录
+          </div>
         ) : error ? (
           <div className="drawer-error" role="alert">
             <p>{error}</p>
-            <button type="button" className="secondary-button" onClick={() => void load()}><RotateCcw size={14} />重新加载</button>
+            <button type="button" className="secondary-button" onClick={() => void load()}>
+              <RotateCcw size={14} />
+              重新加载
+            </button>
           </div>
-        ) : groups.length ? groups.map(([date, sessions]) => (
-          <section className="history-day" key={date} aria-labelledby={`history-${date}`}>
-            <div className="history-day-heading">
-              <h2 id={`history-${date}`}><CalendarDays size={14} aria-hidden="true" />{date}</h2>
-              <span>{formatDuration(sessions.reduce((sum, item) => sum + item.durationSeconds, 0))}</span>
-            </div>
-            <div className="history-session-list">
-              {sessions.map((session) => (
-                <article className="history-session" key={session.id}>
-                  <div>
-                    <strong>{findTaskTitle(tasks, session.taskId)}</strong>
-                    <span>{session.mode === 'pomodoro' ? '番茄专注' : session.mode === 'stopwatch' ? '自由计时' : '旧版记录'}</span>
-                  </div>
-                  <div className="history-session-time">
-                    <strong>{formatDuration(session.durationSeconds)}</strong>
-                    <time dateTime={session.endedAt}>{new Date(session.endedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}</time>
-                  </div>
-                </article>
-              ))}
-            </div>
-          </section>
-        )) : (
+        ) : groups.length ? (
+          groups.map(([date, sessions]) => (
+            <section className="history-day" key={date} aria-labelledby={`history-${date}`}>
+              <div className="history-day-heading">
+                <h2 id={`history-${date}`}>
+                  <CalendarDays size={14} aria-hidden="true" />
+                  {date}
+                </h2>
+                <span>
+                  {formatDuration(sessions.reduce((sum, item) => sum + item.durationSeconds, 0))}
+                </span>
+              </div>
+              <div className="history-session-list">
+                {sessions.map((session) => (
+                  <article className="history-session" key={session.id}>
+                    <div>
+                      <strong>{findTaskTitle(tasks, session.taskId)}</strong>
+                      <span>
+                        {session.mode === 'pomodoro'
+                          ? '番茄专注'
+                          : session.mode === 'stopwatch'
+                            ? '自由计时'
+                            : '旧版记录'}
+                      </span>
+                    </div>
+                    <div className="history-session-time">
+                      <strong>{formatDuration(session.durationSeconds)}</strong>
+                      <time dateTime={session.endedAt}>
+                        {new Date(session.endedAt).toLocaleTimeString('zh-CN', {
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </time>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ))
+        ) : (
           <div className="history-empty">
             <History size={24} aria-hidden="true" />
             <h2>这个范围还没有专注记录</h2>

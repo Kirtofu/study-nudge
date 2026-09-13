@@ -20,8 +20,8 @@
   --danger: #a53b38;
   --danger-wash: #f1ddda;
   --info: #5d658c;
-  --font-brand: "LXGW WenKai Screen", "Microsoft YaHei UI", system-ui, sans-serif;
-  --font-ui: "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", system-ui, sans-serif;
+  --font-brand: 'LXGW WenKai Screen', 'Microsoft YaHei UI', system-ui, sans-serif;
+  --font-ui: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', system-ui, sans-serif;
   --space-1: 0.25rem;
   --space-2: 0.5rem;
   --space-3: 0.75rem;
@@ -78,8 +78,8 @@ button {
 
 button,
 select,
-input[type="date"],
-input[type="datetime-local"] {
+input[type='date'],
+input[type='datetime-local'] {
   cursor: pointer;
 }
 
@@ -160,8 +160,8 @@ select {
 .app-shell {
   display: grid;
   grid-template-areas:
-    "title title title"
-    "sidebar main drawer";
+    'title title title'
+    'sidebar main drawer';
   grid-template-columns: 14.5rem minmax(0, 1fr) 0;
   grid-template-rows: 2.625rem minmax(0, 1fr);
   width: 100%;
@@ -231,7 +231,10 @@ select {
   background: var(--surface);
   color: var(--meta);
   text-align: left;
-  transition: border-color 160ms var(--ease-out-quart), background 160ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    border-color 160ms var(--ease-out-quart),
+    background 160ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .command-trigger:hover {
@@ -296,7 +299,10 @@ select {
   background: transparent;
   color: var(--ink-secondary);
   text-align: left;
-  transition: color 150ms var(--ease-out-quart), background 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    color 150ms var(--ease-out-quart),
+    background 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .nav-item:hover {
@@ -316,7 +322,7 @@ select {
 }
 
 .nav-item.is-active::after {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0.38rem 0.25rem auto auto;
   width: 0.28rem;
@@ -363,7 +369,10 @@ select {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--meta);
-  transition: color 150ms var(--ease-out-quart), background 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    color 150ms var(--ease-out-quart),
+    background 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .icon-button:hover {
@@ -420,7 +429,9 @@ select {
   background: var(--surface);
   color: var(--ink);
   text-align: left;
-  transition: background 160ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 160ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .focus-summary:hover {
@@ -445,7 +456,7 @@ select {
 }
 
 .focus-summary-ring::before {
-  content: "";
+  content: '';
   position: absolute;
   width: 1.55rem;
   height: 1.55rem;
@@ -488,7 +499,9 @@ select {
   color: var(--meta);
   font-size: 0.75rem;
   text-align: left;
-  transition: background 150ms var(--ease-out-quart), color 150ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    color 150ms var(--ease-out-quart);
 }
 
 .settings-button:hover {
@@ -550,7 +563,10 @@ select {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--meta);
-  transition: border-color 160ms var(--ease-out-quart), background 160ms var(--ease-out-quart), color 160ms var(--ease-out-quart);
+  transition:
+    border-color 160ms var(--ease-out-quart),
+    background 160ms var(--ease-out-quart),
+    color 160ms var(--ease-out-quart);
 }
 
 .task-search:focus-within,
@@ -592,7 +608,9 @@ select {
   background: transparent;
   color: var(--ink-secondary);
   font-size: 0.75rem;
-  transition: background 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .toolbar-command:hover {
@@ -619,7 +637,10 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: #fffefa;
-  transition: border-color 180ms var(--ease-out-quart), box-shadow 180ms var(--ease-out-quart), transform 180ms var(--ease-out-quart);
+  transition:
+    border-color 180ms var(--ease-out-quart),
+    box-shadow 180ms var(--ease-out-quart),
+    transform 180ms var(--ease-out-quart);
 }
 
 .quick-add:focus-within,
@@ -670,7 +691,10 @@ select {
   background: transparent;
   color: var(--meta);
   font-size: 0.6875rem;
-  transition: color 150ms var(--ease-out-quart), background 150ms var(--ease-out-quart), border-color 150ms var(--ease-out-quart);
+  transition:
+    color 150ms var(--ease-out-quart),
+    background 150ms var(--ease-out-quart),
+    border-color 150ms var(--ease-out-quart);
 }
 
 .quick-add-options button:hover,
@@ -695,7 +719,9 @@ select {
   border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--accent-on);
-  transition: background 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .quick-add-submit:hover:not(:disabled) {
@@ -753,7 +779,10 @@ select {
   border-radius: var(--radius-md);
   background: transparent;
   cursor: default;
-  transition: background 160ms var(--ease-out-quart), box-shadow 160ms var(--ease-out-quart), transform 160ms var(--ease-out-quart);
+  transition:
+    background 160ms var(--ease-out-quart),
+    box-shadow 160ms var(--ease-out-quart),
+    transform 160ms var(--ease-out-quart);
 }
 
 .task-row:hover {
@@ -783,7 +812,9 @@ select {
   color: transparent;
   cursor: grab;
   touch-action: none;
-  transition: color 150ms var(--ease-out-quart), background 150ms var(--ease-out-quart);
+  transition:
+    color 150ms var(--ease-out-quart),
+    background 150ms var(--ease-out-quart);
 }
 
 .task-row:hover .drag-handle,
@@ -810,7 +841,10 @@ select {
   border-radius: 50%;
   background: transparent;
   color: var(--meta);
-  transition: color 150ms var(--ease-out-quart), transform 120ms var(--ease-out-quart), background 150ms var(--ease-out-quart);
+  transition:
+    color 150ms var(--ease-out-quart),
+    transform 120ms var(--ease-out-quart),
+    background 150ms var(--ease-out-quart);
 }
 
 .task-check:hover {
@@ -886,7 +920,7 @@ select {
 }
 
 .task-title-line h3::after {
-  content: "";
+  content: '';
   position: absolute;
   left: 0;
   top: 52%;
@@ -915,9 +949,15 @@ select {
   border-radius: 50%;
 }
 
-.priority-low { background: var(--success); }
-.priority-medium { background: var(--warning); }
-.priority-high { background: var(--danger); }
+.priority-low {
+  background: var(--success);
+}
+.priority-medium {
+  background: var(--warning);
+}
+.priority-high {
+  background: var(--danger);
+}
 
 .task-meta {
   display: flex;
@@ -946,7 +986,9 @@ select {
   align-items: center;
   opacity: 0;
   transform: translateX(4px);
-  transition: opacity 150ms var(--ease-out-quart), transform 150ms var(--ease-out-quart);
+  transition:
+    opacity 150ms var(--ease-out-quart),
+    transform 150ms var(--ease-out-quart);
 }
 
 .task-row:hover .task-actions,
@@ -1096,7 +1138,11 @@ select {
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 600;
-  transition: background 150ms var(--ease-out-quart), color 150ms var(--ease-out-quart), border-color 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    color 150ms var(--ease-out-quart),
+    border-color 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .primary-button {
@@ -1205,6 +1251,10 @@ select {
   grid-template-rows: auto auto minmax(0, 1fr);
 }
 
+.detail-drawer.has-save-error {
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+
 .drawer-header,
 .drawer-footer {
   display: flex;
@@ -1262,7 +1312,10 @@ select {
   font-family: var(--font-ui);
   font-size: 0.75rem;
   font-weight: 600;
-  transition: background 180ms var(--ease-out-quart), color 180ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 180ms var(--ease-out-quart),
+    color 180ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .settings-tabs button:hover {
@@ -1275,7 +1328,7 @@ select {
 }
 
 .settings-tabs button.is-active,
-.settings-tabs button[aria-selected="true"] {
+.settings-tabs button[aria-selected='true'] {
   background: var(--accent-wash);
   color: var(--accent-deep);
 }
@@ -1472,7 +1525,9 @@ select {
 }
 
 @keyframes skeleton-pulse {
-  to { opacity: 0.45; }
+  to {
+    opacity: 0.45;
+  }
 }
 
 .detail-title-row {
@@ -1492,7 +1547,10 @@ select {
   border-radius: 50%;
   background: transparent;
   color: var(--meta);
-  transition: background 150ms var(--ease-out-quart), color 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    color 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .detail-check:hover,
@@ -1548,7 +1606,9 @@ select {
   border-radius: var(--radius-sm);
   background: var(--bg);
   outline: 0;
-  transition: border-color 150ms var(--ease-out-quart), background 150ms var(--ease-out-quart);
+  transition:
+    border-color 150ms var(--ease-out-quart),
+    background 150ms var(--ease-out-quart);
 }
 
 .notes-input {
@@ -1672,7 +1732,10 @@ select {
   background: transparent;
   color: var(--meta);
   font-size: 0.6875rem;
-  transition: background 150ms var(--ease-out-quart), color 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    color 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .priority-control button:hover {
@@ -1690,9 +1753,15 @@ select {
   box-shadow: 0 2px 5px rgb(20 20 19 / 8%);
 }
 
-.priority-control .priority-choice-high.is-selected { color: var(--danger); }
-.priority-control .priority-choice-medium.is-selected { color: var(--warning); }
-.priority-control .priority-choice-low.is-selected { color: var(--success); }
+.priority-control .priority-choice-high.is-selected {
+  color: var(--danger);
+}
+.priority-control .priority-choice-medium.is-selected {
+  color: var(--warning);
+}
+.priority-control .priority-choice-low.is-selected {
+  color: var(--success);
+}
 
 .section-title-line {
   display: flex;
@@ -1722,7 +1791,9 @@ select {
   color: var(--ink-secondary);
   font-size: 0.8125rem;
   text-align: left;
-  transition: background 150ms var(--ease-out-quart), color 150ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    color 150ms var(--ease-out-quart);
 }
 
 .subtask-row:hover {
@@ -1938,7 +2009,9 @@ select {
   border-radius: var(--radius-sm);
   background: transparent;
   text-align: left;
-  transition: background 120ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 120ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .command-results button:hover,
@@ -2124,8 +2197,12 @@ select {
   animation: loading-dot 900ms ease-in-out infinite alternate;
 }
 
-.loading-lines span:nth-child(2) { animation-delay: 120ms; }
-.loading-lines span:nth-child(3) { animation-delay: 240ms; }
+.loading-lines span:nth-child(2) {
+  animation-delay: 120ms;
+}
+.loading-lines span:nth-child(3) {
+  animation-delay: 240ms;
+}
 
 .mini-focus {
   position: relative;
@@ -2244,37 +2321,79 @@ select {
 }
 
 @keyframes check-pop {
-  0% { transform: scale(0.65); }
-  70% { transform: scale(1.08); }
-  100% { transform: scale(1); }
+  0% {
+    transform: scale(0.65);
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+  }
 }
 
 @keyframes ink-one {
-  0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
-  35% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-0.72rem, -0.55rem) scale(0.8); }
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-0.72rem, -0.55rem) scale(0.8);
+  }
 }
 
 @keyframes ink-two {
-  0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
-  35% { opacity: 1; }
-  100% { opacity: 0; transform: translate(0.78rem, -0.42rem) scale(0.65); }
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0.78rem, -0.42rem) scale(0.65);
+  }
 }
 
 @keyframes ink-three {
-  0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
-  35% { opacity: 1; }
-  100% { opacity: 0; transform: translate(0.5rem, 0.7rem) scale(0.72); }
+  0% {
+    opacity: 0;
+    transform: translate(0, 0) scale(0.4);
+  }
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(0.5rem, 0.7rem) scale(0.72);
+  }
 }
 
 @keyframes loading-breathe {
-  from { transform: scale(0.94); filter: saturate(0.8); }
-  to { transform: scale(1.04); filter: saturate(1.1); }
+  from {
+    transform: scale(0.94);
+    filter: saturate(0.8);
+  }
+  to {
+    transform: scale(1.04);
+    filter: saturate(1.1);
+  }
 }
 
 @keyframes loading-dot {
-  from { opacity: 0.25; transform: translateY(0); }
-  to { opacity: 1; transform: translateY(-0.18rem); }
+  from {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(-0.18rem);
+  }
 }
 
 @media (max-width: 68rem) {
@@ -2450,7 +2569,9 @@ select {
   justify-content: center;
   background: transparent;
   color: var(--ink-secondary);
-  transition: background 140ms var(--ease-out-quart), color 140ms var(--ease-out-quart);
+  transition:
+    background 140ms var(--ease-out-quart),
+    color 140ms var(--ease-out-quart);
 }
 
 .window-controls button:hover {
@@ -2500,7 +2621,10 @@ select {
   font-size: 0.75rem;
   font-weight: 650;
   white-space: nowrap;
-  transition: background 150ms var(--ease-out-quart), color 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    color 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .quick-add-action:active:not(:disabled) {
@@ -2518,12 +2642,12 @@ select {
 }
 
 .quick-add-action-primary {
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--accent-on);
 }
 
 .quick-add-action-primary:hover:not(:disabled) {
-  background: var(--accent-strong);
+  background: var(--accent-deep);
 }
 
 .task-item-shell {
@@ -2537,7 +2661,7 @@ select {
 }
 
 .learning-task-button:hover,
-.learning-task-button[aria-expanded="true"] {
+.learning-task-button[aria-expanded='true'] {
   background: var(--accent-wash);
   color: var(--accent-deep);
 }
@@ -2551,12 +2675,15 @@ select {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: conic-gradient(var(--accent) calc(var(--task-learning-progress) * 1turn), var(--border) 0);
+  background: conic-gradient(
+    var(--accent) calc(var(--task-learning-progress) * 1turn),
+    var(--border) 0
+  );
   color: var(--accent-deep);
 }
 
 .task-learning-ring::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0.18rem;
   border-radius: 50%;
@@ -2643,13 +2770,6 @@ select {
   min-width: 0;
 }
 
-.learning-pack-title span:not(.learning-pack-mark) {
-  display: block;
-  color: var(--accent-deep);
-  font-size: 0.6875rem;
-  font-weight: 700;
-}
-
 .learning-pack-title h2 {
   overflow: hidden;
   max-width: min(42vw, 34rem);
@@ -2707,7 +2827,10 @@ select {
   width: 1rem;
   height: 1rem;
   border-radius: 50%;
-  background: conic-gradient(var(--success) calc(var(--learning-progress) * 1turn), var(--border) 0);
+  background: conic-gradient(
+    var(--success) calc(var(--learning-progress) * 1turn),
+    var(--border) 0
+  );
 }
 
 .learning-overall-progress i {
@@ -2726,16 +2849,18 @@ select {
   gap: 0.35rem;
   padding: 0 var(--space-3);
   border-radius: var(--radius-sm);
-  background: var(--accent);
+  background: var(--accent-strong);
   color: var(--accent-on);
   font-size: 0.75rem;
   font-weight: 650;
-  transition: background 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .learning-generate-button:hover:not(:disabled),
 .compact-primary:hover:not(:disabled) {
-  background: var(--accent-strong);
+  background: var(--accent-deep);
 }
 
 .learning-generate-button:active:not(:disabled),
@@ -2756,7 +2881,9 @@ select {
   color: var(--accent-deep);
   font-size: 0.75rem;
   font-weight: 650;
-  transition: background 150ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+  transition:
+    background 150ms var(--ease-out-quart),
+    transform 100ms var(--ease-out-quart);
 }
 
 .learning-cancel-button:hover {
@@ -2912,7 +3039,7 @@ select {
   color: var(--meta);
 }
 
-.segmented-icon[aria-pressed="true"] {
+.segmented-icon[aria-pressed='true'] {
   background: var(--accent-wash);
   color: var(--accent-deep);
 }
@@ -2952,7 +3079,9 @@ select {
   padding: var(--space-2) var(--space-2) var(--space-2) 0;
   border-bottom: 1px solid var(--border);
   background: transparent;
-  transition: background 160ms var(--ease-out-quart), transform 160ms var(--ease-out-quart);
+  transition:
+    background 160ms var(--ease-out-quart),
+    transform 160ms var(--ease-out-quart);
 }
 
 .learning-resource:hover,
@@ -3062,7 +3191,9 @@ select {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-0.2rem);
-  transition: opacity 150ms var(--ease-out-quart), transform 150ms var(--ease-out-quart);
+  transition:
+    opacity 150ms var(--ease-out-quart),
+    transform 150ms var(--ease-out-quart);
 }
 
 .learning-resource:hover .resource-actions,
@@ -3192,7 +3323,10 @@ select {
   background: var(--surface);
   color: var(--ink);
   box-shadow: 0 3px 6px rgb(20 20 19 / 8%);
-  transition: border-color 150ms var(--ease-out-quart), transform 150ms var(--ease-out-quart), background 150ms var(--ease-out-quart);
+  transition:
+    border-color 150ms var(--ease-out-quart),
+    transform 150ms var(--ease-out-quart),
+    background 150ms var(--ease-out-quart);
 }
 
 .roadmap-node-card.is-selected {
@@ -3469,11 +3603,15 @@ select {
 }
 
 @keyframes spin {
-  to { transform: rotate(1turn); }
+  to {
+    transform: rotate(1turn);
+  }
 }
 
 @keyframes skeleton-shift {
-  to { background-position: -200% 0; }
+  to {
+    background-position: -200% 0;
+  }
 }
 
 @media (max-width: 75rem) and (min-width: 56.01rem) and (min-height: 50rem) {
@@ -3780,7 +3918,7 @@ select {
     font-size: 0.75rem;
   }
 
-  .learning-mobile-tabs button[aria-selected="true"] {
+  .learning-mobile-tabs button[aria-selected='true'] {
     background: var(--accent-wash);
     color: var(--accent-deep);
     font-weight: 700;

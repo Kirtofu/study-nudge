@@ -1,10 +1,11 @@
+import { Minus, Search, Settings, Sparkles, Square, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { Command, Minus, Search, Sparkles, Square, X } from 'lucide-react'
-import { api } from '../bridge'
+import { api, isTauri } from '../bridge'
 import { useNudgeStore } from '../store'
 
 export function TitleBar(): React.JSX.Element {
   const setCommandOpen = useNudgeStore((state) => state.setCommandOpen)
+  const openSettings = useNudgeStore((state) => state.openSettings)
   const [platform, setPlatform] = useState('unknown')
 
   useEffect(() => {
@@ -20,19 +21,46 @@ export function TitleBar(): React.JSX.Element {
         <strong>Nudge</strong>
         <span className="title-subtitle">待办与专注</span>
       </div>
-      <button type="button" className="command-trigger no-drag" onClick={() => setCommandOpen(true)}>
+      <button
+        type="button"
+        className="command-trigger no-drag"
+        onClick={() => setCommandOpen(true)}
+      >
         <Search size={15} aria-hidden="true" />
         <span>搜索任务或运行命令</span>
-        <kbd>
-          <Command size={11} aria-hidden="true" />K
-        </kbd>
+        <kbd>{platform === 'macos' ? '⌘ K' : 'Ctrl K'}</kbd>
       </button>
       <div className="title-drag-space" />
-      <div className="window-controls no-drag" aria-label="窗口控制">
-        <button type="button" aria-label="最小化" onClick={() => void api.desktop.minimize()}><Minus size={15} /></button>
-        <button type="button" aria-label="最大化或还原" onClick={() => void api.desktop.toggleMaximize()}><Square size={12} /></button>
-        <button type="button" className="window-close" aria-label="关闭" onClick={() => void api.desktop.close()}><X size={15} /></button>
-      </div>
+      <button
+        type="button"
+        className="icon-button mobile-settings no-drag"
+        aria-label="打开设置"
+        onClick={openSettings}
+      >
+        <Settings size={17} />
+      </button>
+      {isTauri && !['android', 'ios'].includes(platform) && (
+        <div className="window-controls no-drag" aria-label="窗口控制">
+          <button type="button" aria-label="最小化" onClick={() => void api.desktop.minimize()}>
+            <Minus size={15} />
+          </button>
+          <button
+            type="button"
+            aria-label="最大化或还原"
+            onClick={() => void api.desktop.toggleMaximize()}
+          >
+            <Square size={12} />
+          </button>
+          <button
+            type="button"
+            className="window-close"
+            aria-label="关闭"
+            onClick={() => void api.desktop.close()}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      )}
     </header>
   )
 }

@@ -1,0 +1,140 @@
+.learning-page {
+  container-type: inline-size;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.learning-page .learning-pack {
+  position: static;
+  display: flex;
+  flex-direction: column;
+  height: 100% !important;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+  background: var(--surface);
+}
+.learning-back {
+  display: inline-flex;
+  align-self: flex-start;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0.75rem 1rem 0.25rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 0.4rem;
+  color: var(--ink-secondary);
+  background: transparent;
+  font-size: 0.75rem;
+  transition: background 160ms ease-out;
+}
+.learning-back:hover {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.learning-page .learning-pack-header {
+  min-height: 4rem;
+  flex-shrink: 0;
+  padding: 0.65rem 1rem;
+}
+.learning-page .learning-pack-title h2 {
+  max-width: none;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 1.15rem;
+}
+.learning-page .learning-columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.25fr);
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+.learning-page .learning-columns > div {
+  display: block;
+  grid-column: auto;
+  min-height: 0;
+  height: 100%;
+}
+.learning-page .learning-column-roadmap,
+.learning-page .roadmap-canvas {
+  min-height: 0;
+}
+.learning-page .learning-column-heading p {
+  display: none;
+}
+.learning-page .learning-pack-header-actions .learning-generate-button,
+.learning-page .learning-pack-header-actions .learning-cancel-button {
+  width: auto;
+  min-height: 2.2rem;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+}
+.learning-page .learning-consent {
+  flex-shrink: 0;
+}
+.learning-load-error {
+  padding: 2rem;
+}
+.learning-load-error h2 {
+  font-size: 1.3rem;
+}
+.learning-load-error p {
+  margin: 0.75rem 0 1.5rem;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+}
+.learning-page .learning-mobile-tabs {
+  display: none;
+}
+
+@container (max-width: 54rem) {
+  .learning-page .learning-mobile-tabs {
+    display: grid;
+    flex-shrink: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.25rem;
+    padding: 0.4rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .learning-mobile-tabs button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    min-height: 2.75rem;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--ink-secondary);
+    font-size: 0.8125rem;
+  }
+  .learning-mobile-tabs button[aria-selected='true'] {
+    background: var(--accent-wash);
+    color: var(--accent-deep);
+  }
+  .learning-page .learning-columns {
+    display: block;
+  }
+  .learning-page .learning-columns > div {
+    display: none;
+  }
+  .learning-page .learning-columns > div.is-mobile-active {
+    display: block;
+  }
+  .learning-page .learning-pack-mark {
+    display: none;
+  }
+  .learning-page .learning-pack-header-actions .learning-overall-progress,
+  .learning-page .learning-pack-header-actions .learning-pack-status {
+    display: none;
+  }
+  .learning-page .learning-pack-title h2 {
+    font-size: 1rem;
+  }
+  .learning-page .learning-pack-header {
+    gap: 0.5rem;
+  }
+}

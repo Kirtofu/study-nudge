@@ -1,6 +1,6 @@
-import { format, isBefore, isSameDay, parseISO, startOfDay } from 'date-fns'
+import type { FocusState } from '@shared/types'
+import { format, parseISO } from 'date-fns'
 import { zhCN } from 'date-fns/locale'
-import type { FocusState, Task, ViewId } from '@shared/types'
 
 export function dateKey(date = new Date()): string {
   return format(date, 'yyyy-MM-dd')
@@ -35,37 +35,10 @@ export function formatTimer(seconds: number): string {
 
 export function getElapsedFocusSeconds(state: FocusState, now = Date.now()): number {
   if (state.status !== 'running' || !state.startedAt) return state.accumulatedSeconds
-  return state.accumulatedSeconds + Math.max(0, Math.floor((now - parseISO(state.startedAt).getTime()) / 1000))
+  return (
+    state.accumulatedSeconds +
+    Math.max(0, Math.floor((now - parseISO(state.startedAt).getTime()) / 1000))
+  )
 }
 
-export function filterTasks(tasks: Task[], view: ViewId, search: string): Task[] {
-  const query = search.trim().toLocaleLowerCase('zh-CN')
-  const today = dateKey()
-  return tasks.filter((task) => {
-    if (task.status === 'deleted') return false
-    const matchesSearch =
-      !query ||
-      task.title.toLocaleLowerCase('zh-CN').includes(query) ||
-      task.notes.toLocaleLowerCase('zh-CN').includes(query) ||
-      task.tags.some((tag) => tag.name.toLocaleLowerCase('zh-CN').includes(query))
-    if (!matchesSearch) return false
-    if (view === 'completed') return task.status === 'completed'
-    if (task.status !== 'open') return false
-    if (view === 'today') {
-      if (task.scheduledFor === today) return true
-      return Boolean(task.dueAt && isBefore(parseISO(task.dueAt), startOfDay(new Date())))
-    }
-    if (view === 'inbox') return task.scheduledFor === null
-    if (view === 'upcoming') return Boolean(task.scheduledFor && task.scheduledFor > today)
-    if (view.startsWith('list:')) return task.listId === view.slice(5)
-    return true
-  })
-}
-
-export function groupLabel(task: Task): '上午' | '下午' | '晚间' | '随时' {
-  if (!task.dueAt || !isSameDay(parseISO(task.dueAt), new Date())) return '随时'
-  const hour = parseISO(task.dueAt).getHours()
-  if (hour < 12) return '上午'
-  if (hour < 18) return '下午'
-  return '晚间'
-}
+export { filterTasks } from './features/tasks/model'

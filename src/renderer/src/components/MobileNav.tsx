@@ -1,5 +1,6 @@
-import { CalendarDays, CheckCircle2, Inbox, Plus, Sun } from 'lucide-react'
 import type { ViewId } from '@shared/types'
+import { CalendarDays, CheckCircle2, Inbox, Plus, Sun } from 'lucide-react'
+import { beginAdd } from '../features/tasks/navigation'
 import { useNudgeStore } from '../store'
 
 const items: Array<{ id: ViewId; label: string; icon: typeof Inbox }> = [
@@ -16,19 +17,34 @@ export function MobileNav(): React.JSX.Element {
     <nav className="mobile-nav" aria-label="移动端主导航">
       {items.slice(0, 2).map((item) => {
         const Icon = item.icon
-        return <button key={item.id} type="button" className={currentView === item.id ? 'is-active' : ''} onClick={() => setView(item.id)}><Icon size={19} /><span>{item.label}</span></button>
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className={currentView === item.id ? 'is-active' : ''}
+            onClick={() => setView(item.id)}
+          >
+            <Icon size={19} />
+            <span>{item.label}</span>
+          </button>
+        )
       })}
-      <button
-        type="button"
-        className="mobile-add-button"
-        aria-label="添加任务"
-        onClick={() => document.getElementById('quick-add-input')?.focus()}
-      >
+      <button type="button" className="mobile-add-button" aria-label="添加任务" onClick={beginAdd}>
         <Plus size={22} />
       </button>
       {items.slice(2).map((item) => {
         const Icon = item.icon
-        return <button key={item.id} type="button" className={currentView === item.id ? 'is-active' : ''} onClick={() => setView(item.id)}><Icon size={19} /><span>{item.label}</span></button>
+        return (
+          <button
+            key={item.id}
+            type="button"
+            className={currentView === item.id ? 'is-active' : ''}
+            onClick={() => setView(item.id)}
+          >
+            <Icon size={19} />
+            <span>{item.label}</span>
+          </button>
+        )
       })}
     </nav>
   )

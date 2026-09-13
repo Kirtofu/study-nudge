@@ -1,108 +1,88 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { addDays, format } from 'date-fns'
-import { ArrowUp, CalendarPlus, Inbox, Plus, Route, Sparkles } from 'lucide-react'
-import type { Priority } from '@shared/types'
-import { api } from '../bridge'
+import { addDays, parseISO } from 'date-fns'
+import { ArrowUp, CalendarDays, ListTodo, Plus, Route } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { localDay } from '../features/tasks/model'
+import { parseQuickTask } from '../features/tasks/quick-task'
 import { useNudgeStore } from '../store'
-import { dateKey } from '../utils'
 import { useToast } from './Toast'
 
-export function parseQuickTask(raw: string): { title: string; priority: Priority; tagNames: string[] } {
-  const tagNames = Array.from(raw.matchAll(/#([^\s#]+)/g)).map((match) => match[1])
-  let priority: Priority = 'none'
-  if (/!高(?=\s|$)|!high\b/i.test(raw)) priority = 'high'
-  else if (/!中(?=\s|$)|!medium\b/i.test(raw)) priority = 'medium'
-  else if (/!低(?=\s|$)|!low\b/i.test(raw)) priority = 'low'
-  const title = raw
-    .replace(/#([^\s#]+)/g, '')
-    .replace(/!(?:高|中|低)(?=\s|$)|!(?:high|medium|low)\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  return { title, priority, tagNames }
-}
+export { parseQuickTask } from '../features/tasks/quick-task'
 
 export function QuickAdd(): React.JSX.Element {
   const currentView = useNudgeStore((state) => state.currentView)
+  const today = useNudgeStore((state) => state.today)
+  const lists = useNudgeStore((state) => state.lists)
   const createTask = useNudgeStore((state) => state.createTask)
-  const closeDrawer = useNudgeStore((state) => state.closeDrawer)
   const openLearning = useNudgeStore((state) => state.openLearning)
   const [value, setValue] = useState('')
   const [expanded, setExpanded] = useState(false)
-  const [schedule, setSchedule] = useState<'view' | 'today' | 'tomorrow' | 'inbox'>('view')
-  const [submitting, setSubmitting] = useState<'add' | 'plan' | null>(null)
+  const [date, setDate] = useState<string | null>(null)
+  const [list, setList] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const busy = useRef(false)
+  const composing = useRef(false)
+  const generation = useRef(0)
   const showToast = useToast()
+  const tomorrow = localDay(addDays(parseISO(today), 1))
+  const defaultDate = currentView === 'today' ? today : currentView === 'upcoming' ? tomorrow : ''
+  const scheduledFor = date ?? defaultDate
+  const listId = list ?? (currentView.startsWith('list:') ? currentView.slice(5) : 'inbox')
 
   useEffect(() => {
-    const focusInput = (): void => {
-      setExpanded(true)
-      window.setTimeout(() => inputRef.current?.focus(), 0)
-    }
-    const offQuickAdd = api.desktop.onQuickAdd(focusInput)
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'n') {
-        event.preventDefault()
-        focusInput()
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => {
-      offQuickAdd()
-      window.removeEventListener('keydown', onKeyDown)
-    }
-  }, [])
-
-  const viewDefaults = useMemo(() => {
-    if (currentView.startsWith('list:')) return { listId: currentView.slice(5), scheduledFor: null }
-    if (currentView === 'today') return { listId: 'inbox', scheduledFor: dateKey() }
-    if (currentView === 'upcoming') {
-      return { listId: 'inbox', scheduledFor: format(addDays(new Date(), 1), 'yyyy-MM-dd') }
-    }
-    return { listId: 'inbox', scheduledFor: null }
+    setDate(null)
+    setList(null)
   }, [currentView])
 
   const submit = async (withPlanning = false): Promise<void> => {
+    if (busy.current || composing.current) return
     const parsed = parseQuickTask(value)
     if (!parsed.title) return
-    let scheduledFor = viewDefaults.scheduledFor
-    if (schedule === 'today') scheduledFor = dateKey()
-    if (schedule === 'tomorrow') scheduledFor = format(addDays(new Date(), 1), 'yyyy-MM-dd')
-    if (schedule === 'inbox') scheduledFor = null
-    setSubmitting(withPlanning ? 'plan' : 'add')
+    busy.current = true
+    setSubmitting(true)
+    const revision = generation.current
+    let savedId: string | null = null
     try {
-      const task = await createTask({
-        title: parsed.title,
-        listId: viewDefaults.listId,
-        scheduledFor,
-        priority: parsed.priority,
-        tagNames: parsed.tagNames
-      })
-      if (withPlanning) await openLearning(task.id)
-      else closeDrawer()
-      setValue('')
-      setExpanded(false)
-      setSchedule('view')
-      showToast({
-        message: withPlanning ? '任务已添加，学习包已经展开' : '任务已经记下来了',
-        detail: parsed.title
-      })
+      const task = await createTask({ ...parsed, listId, scheduledFor: scheduledFor || null })
+      savedId = task.id
+      if (generation.current === revision) setValue('')
+      if (withPlanning) {
+        await openLearning(task.id)
+      } else {
+        showToast({ message: '任务已记下', detail: task.title, duration: 2200 })
+        inputRef.current?.focus()
+      }
     } catch (error) {
-      showToast({ message: '任务没有添加成功', detail: error instanceof Error ? error.message : '请稍后重试' })
+      showToast({
+        tone: 'error',
+        message: savedId ? '任务已保存，学习包暂时没有打开' : '任务没有添加成功',
+        detail: error instanceof Error ? error.message : '请重试',
+        ...(savedId
+          ? {
+              actionLabel: '打开学习包',
+              onAction: async () => {
+                await openLearning(savedId!)
+              }
+            }
+          : {})
+      })
     } finally {
-      setSubmitting(null)
+      busy.current = false
+      setSubmitting(false)
     }
   }
 
   return (
     <form
       className={`quick-add ${expanded ? 'is-expanded' : ''}`}
+      aria-label="快速记录"
       onSubmit={(event) => {
         event.preventDefault()
-        void submit(false)
+        void submit()
       }}
     >
       <span className="quick-add-leading" aria-hidden="true">
-        {expanded ? <Sparkles size={18} /> : <Plus size={18} />}
+        <Plus size={19} />
       </span>
       <label className="sr-only" htmlFor="quick-add-input">
         快速添加任务
@@ -111,56 +91,78 @@ export function QuickAdd(): React.JSX.Element {
         ref={inputRef}
         id="quick-add-input"
         value={value}
-        onFocus={() => setExpanded(true)}
-        onChange={(event) => setValue(event.target.value)}
-        placeholder="添加一件要做的事…"
         autoComplete="off"
+        placeholder="添加一件要做的事…"
+        onFocus={() => setExpanded(true)}
+        onChange={(event) => {
+          generation.current++
+          setValue(event.target.value)
+        }}
+        onCompositionStart={() => {
+          composing.current = true
+        }}
+        onCompositionEnd={() => {
+          composing.current = false
+        }}
+        onKeyDown={(event) => {
+          if (
+            event.key === 'Enter' &&
+            (composing.current || event.nativeEvent.isComposing || event.keyCode === 229)
+          )
+            event.preventDefault()
+        }}
       />
-      {expanded ? (
+      <button
+        type="submit"
+        className="quick-add-action quick-add-action-primary"
+        disabled={!parseQuickTask(value).title || submitting}
+        aria-label="添加任务"
+      >
+        <ArrowUp size={16} aria-hidden="true" />
+        <span>{submitting ? '保存中…' : '添加'}</span>
+      </button>
+      {expanded && (
         <div className="quick-add-options" aria-label="安排任务">
+          <label className="quick-add-date">
+            <CalendarDays size={14} aria-hidden="true" />
+            <span className="sr-only">新任务日期</span>
+            <input
+              type="date"
+              aria-label="新任务日期"
+              value={scheduledFor}
+              onChange={(event) => setDate(event.target.value)}
+            />
+          </label>
+          <button type="button" onClick={() => setDate('')} aria-pressed={!scheduledFor}>
+            不安排
+          </button>
+          <label className="quick-add-list">
+            <ListTodo size={14} aria-hidden="true" />
+            <span className="sr-only">新任务清单</span>
+            <select
+              aria-label="新任务清单"
+              value={listId}
+              onChange={(event) => setList(event.target.value)}
+            >
+              {lists.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="quick-add-hint">Enter 连续记录 · #标签 · !高</span>
           <button
             type="button"
-            className={schedule === 'today' ? 'is-selected' : ''}
-            onClick={() => setSchedule('today')}
+            className="quick-plan-link"
+            disabled={!parseQuickTask(value).title || submitting}
+            onClick={() => void submit(true)}
           >
-            <CalendarPlus size={13} aria-hidden="true" />今天
+            <Route size={14} aria-hidden="true" />
+            添加并规划学习
           </button>
-          <button
-            type="button"
-            className={schedule === 'tomorrow' ? 'is-selected' : ''}
-            onClick={() => setSchedule('tomorrow')}
-          >
-            明天
-          </button>
-          <button
-            type="button"
-            className={schedule === 'inbox' ? 'is-selected' : ''}
-            onClick={() => setSchedule('inbox')}
-          >
-            <Inbox size={13} aria-hidden="true" />收集箱
-          </button>
-          <span className="quick-add-hint">支持 #标签 与 !高 / !中 / !低</span>
         </div>
-      ) : null}
-      <div className="quick-add-actions">
-        <button
-          type="submit"
-          className="quick-add-action quick-add-action-secondary"
-          disabled={!parseQuickTask(value).title || submitting !== null}
-        >
-          <ArrowUp size={15} aria-hidden="true" />
-          <span>{submitting === 'add' ? '添加中…' : '添加任务'}</span>
-        </button>
-        <button
-          type="button"
-          className="quick-add-action quick-add-action-primary"
-          disabled={!parseQuickTask(value).title || submitting !== null}
-          onClick={() => void submit(true)}
-        >
-          <Route size={15} aria-hidden="true" />
-          <span>{submitting === 'plan' ? '规划中…' : '规划并添加'}</span>
-        </button>
-      </div>
+      )}
     </form>
   )
 }

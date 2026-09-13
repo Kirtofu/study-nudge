@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseQuickTask } from './QuickAdd'
+import { parseQuickTask } from '../features/tasks/quick-task'
 
 describe('parseQuickTask', () => {
   it('extracts Chinese tags and priority without leaving control tokens in the title', () => {

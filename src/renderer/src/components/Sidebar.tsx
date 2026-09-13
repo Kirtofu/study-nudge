@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import type { ViewId } from '@shared/types'
 import {
   CalendarDays,
   CheckCircle2,
@@ -11,7 +11,7 @@ import {
   TimerReset,
   X
 } from 'lucide-react'
-import type { ViewId } from '@shared/types'
+import { useMemo, useState } from 'react'
 import { useNudgeStore } from '../store'
 import { filterTasks, formatDuration } from '../utils'
 import { useToast } from './Toast'
@@ -32,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
 export function Sidebar(): React.JSX.Element {
   const currentView = useNudgeStore((state) => state.currentView)
   const tasks = useNudgeStore((state) => state.tasks)
+  const today = useNudgeStore((state) => state.today)
   const lists = useNudgeStore((state) => state.lists)
   const focusStats = useNudgeStore((state) => state.focusStats)
   const setView = useNudgeStore((state) => state.setView)
@@ -45,9 +46,9 @@ export function Sidebar(): React.JSX.Element {
   const counts = useMemo(
     () =>
       Object.fromEntries(
-        NAV_ITEMS.map((item) => [item.id, filterTasks(tasks, item.id, '').length])
+        NAV_ITEMS.map((item) => [item.id, filterTasks(tasks, item.id, '', today).length])
       ) as Record<ViewId, number>,
-    [tasks]
+    [tasks, today]
   )
 
   const submitList = async (): Promise<void> => {
@@ -59,7 +60,10 @@ export function Sidebar(): React.JSX.Element {
       setAddingList(false)
       showToast({ message: `已创建“${name}”清单` })
     } catch (error) {
-      showToast({ message: '清单没有创建成功', detail: error instanceof Error ? error.message : '请稍后重试' })
+      showToast({
+        message: '清单没有创建成功',
+        detail: error instanceof Error ? error.message : '请稍后重试'
+      })
     }
   }
 
@@ -109,7 +113,9 @@ export function Sidebar(): React.JSX.Element {
             .map((list) => {
               const view = `list:${list.id}` as ViewId
               const active = currentView === view
-              const count = tasks.filter((task) => task.status === 'open' && task.listId === list.id).length
+              const count = tasks.filter(
+                (task) => task.status === 'open' && task.listId === list.id
+              ).length
               return (
                 <button
                   type="button"
@@ -118,7 +124,11 @@ export function Sidebar(): React.JSX.Element {
                   aria-current={active ? 'page' : undefined}
                   onClick={() => setView(view)}
                 >
-                  <span className="list-color" style={{ backgroundColor: list.color }} aria-hidden="true" />
+                  <span
+                    className="list-color"
+                    style={{ backgroundColor: list.color }}
+                    aria-hidden="true"
+                  />
                   <span>{list.name}</span>
                   <span className="nav-count">{count}</span>
                 </button>
@@ -144,7 +154,12 @@ export function Sidebar(): React.JSX.Element {
                 placeholder="清单名称"
                 autoFocus
               />
-              <button type="button" className="icon-button" aria-label="取消新建清单" onClick={() => setAddingList(false)}>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="取消新建清单"
+                onClick={() => setAddingList(false)}
+              >
                 <X size={14} aria-hidden="true" />
               </button>
             </form>
@@ -153,18 +168,18 @@ export function Sidebar(): React.JSX.Element {
       </nav>
 
       <div className="sidebar-footer">
-        <button
-          type="button"
-          className="focus-summary"
-          onClick={openFocusHistory}
-        >
-          <span className="focus-summary-ring" style={{ '--progress': dailyProgress } as React.CSSProperties}>
+        <button type="button" className="focus-summary" onClick={openFocusHistory}>
+          <span
+            className="focus-summary-ring"
+            style={{ '--progress': dailyProgress } as React.CSSProperties}
+          >
             <TimerReset size={16} aria-hidden="true" />
           </span>
           <span className="focus-summary-copy">
             <strong>今日专注</strong>
             <small>
-              {focusStats ? formatDuration(focusStats.todaySeconds) : '0分钟'} · 连续 {focusStats?.streakDays ?? 0} 天
+              {focusStats ? formatDuration(focusStats.todaySeconds) : '0分钟'} · 连续{' '}
+              {focusStats?.streakDays ?? 0} 天
             </small>
           </span>
           <ChevronRight size={15} aria-hidden="true" />

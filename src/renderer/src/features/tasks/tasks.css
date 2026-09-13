@@ -1,0 +1,529 @@
+.main-pane {
+  display: flex;
+  flex-direction: column;
+}
+.daily-view {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.daily-view[hidden] {
+  display: none;
+}
+.task-scroll-region {
+  flex: 1;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.preview-label {
+  padding: 0.5rem 1.5rem 0;
+  color: var(--meta);
+  font-size: 0.6875rem;
+}
+.view-count {
+  color: var(--meta);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+.completed-add {
+  align-self: flex-start;
+  margin: 0 1.5rem 1rem;
+}
+.quick-add {
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  flex-shrink: 0;
+}
+.quick-add > input {
+  grid-column: 2;
+  grid-row: 1;
+}
+.quick-add > .quick-add-action {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 3.8rem;
+  width: auto;
+  border-radius: var(--radius-sm);
+}
+.quick-add-action span {
+  display: inline;
+}
+.quick-add-options {
+  grid-column: 1 / -1;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.35rem 0 0.6rem;
+  border-top: 1px solid var(--border);
+}
+.quick-add-options label {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--ink-secondary);
+}
+.quick-add-options input,
+.quick-add-options select {
+  height: 1.9rem;
+  max-width: 10rem;
+  padding: 0 0.2rem;
+  border: 0;
+  background: transparent;
+  font: 0.75rem var(--font-ui);
+}
+.quick-add-options button {
+  min-height: 1.9rem;
+  border-radius: 0.4rem;
+  font-size: 0.75rem;
+}
+.quick-add-options button[aria-pressed='true'] {
+  background: var(--surface-hover);
+  color: var(--ink);
+}
+.quick-add-options .quick-plan-link {
+  border-color: transparent;
+  color: var(--accent-deep);
+  margin-left: auto;
+}
+.quick-add-hint {
+  margin: 0;
+}
+.task-row {
+  min-height: 4rem;
+  border-bottom: 1px solid var(--border);
+  border-radius: 0;
+}
+.task-row:hover {
+  background: var(--surface-hover);
+  box-shadow: none;
+}
+.task-row.is-dragging {
+  border-radius: var(--radius-md);
+}
+.task-open-button {
+  display: block;
+  padding: 0.35rem 0.4rem;
+  border-radius: 0.4rem;
+  background: transparent;
+  text-align: left;
+}
+.task-title {
+  overflow-wrap: anywhere;
+  font-family: var(--font-brand);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+}
+.task-title-line {
+  align-items: baseline;
+}
+.task-meta:empty {
+  display: none;
+}
+.task-row.is-completed .task-title {
+  text-decoration: line-through;
+  color: var(--meta);
+}
+.task-meta {
+  font-size: 0.6875rem;
+  flex-wrap: wrap;
+  row-gap: 0.15rem;
+}
+.task-carried-date {
+  color: var(--accent-deep);
+}
+.task-actions {
+  opacity: 1;
+  gap: 0.1rem;
+}
+.task-actions .icon-button {
+  width: 2rem;
+  height: 2rem;
+}
+.task-menu {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: 15rem;
+  max-height: calc(100dvh - 1rem);
+  overflow-y: auto;
+  padding: 0.65rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: 0 6px 24px rgb(20 20 19 / 14%);
+}
+.task-menu:popover-open {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+.task-menu > strong {
+  padding: 0.25rem 0.35rem;
+  color: var(--meta);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+.task-menu button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.25rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 0.4rem;
+  background: transparent;
+  font-size: 0.8125rem;
+  text-align: left;
+  transition: background 160ms ease-out;
+}
+.task-menu button:hover {
+  background: var(--surface-hover);
+}
+.task-menu-dates {
+  display: flex;
+  gap: 0.25rem;
+}
+.task-menu-dates button {
+  flex: 1;
+  background: var(--surface-hover);
+}
+.task-menu-date {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.75rem;
+}
+.task-menu-date input {
+  width: 100%;
+  min-height: 2rem;
+  border: 1px solid var(--border);
+  border-radius: 0.4rem;
+  background: var(--surface);
+}
+.detail-learning-entry {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.8rem;
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  text-align: left;
+  color: var(--accent-deep);
+  transition: background 160ms ease-out;
+}
+.detail-learning-entry:hover {
+  background: var(--surface-hover);
+}
+.detail-learning-entry span {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.8125rem;
+}
+.detail-learning-entry small {
+  color: var(--meta);
+  font-size: 0.6875rem;
+}
+.save-error,
+.inline-notice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 1rem;
+  background: var(--danger-wash);
+  color: var(--danger);
+  font-size: 0.8125rem;
+}
+.save-error button,
+.inline-notice button {
+  flex-shrink: 0;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 0.4rem;
+  color: inherit;
+  background: transparent;
+  font-size: 0.75rem;
+}
+.save-error {
+  overflow-wrap: anywhere;
+}
+.save-state.save-error {
+  background: transparent;
+  padding: 0;
+}
+.subtask-title {
+  flex: 1;
+  padding: 0.35rem 0;
+  background: transparent;
+  text-align: left;
+  font-family: var(--font-brand);
+}
+.detail-field > select {
+  min-width: 0;
+  max-width: 10rem;
+  border: 0;
+  background: transparent;
+  font-size: 0.75rem;
+}
+.focus-switch-dialog {
+  width: min(28rem, calc(100vw - 2rem));
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--ink);
+}
+.focus-switch-dialog h2 {
+  font-size: 1.3rem;
+}
+.focus-switch-dialog p {
+  margin-top: 0.75rem;
+  color: var(--ink-secondary);
+  font-size: 0.875rem;
+  overflow-wrap: anywhere;
+}
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+dialog::backdrop {
+  background: rgb(20 20 19 / 26%);
+}
+.command-dialog {
+  width: min(38rem, calc(100vw - 2rem));
+  max-width: none;
+  max-height: calc(100dvh - 2rem);
+  margin: min(14vh, 7rem) auto auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: transparent;
+  color: var(--ink);
+  overflow: visible;
+}
+.command-dialog .command-palette {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+.command-results {
+  max-height: min(28rem, 55dvh);
+}
+.command-results button {
+  grid-template-columns: 1.5rem minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  padding: 0.6rem;
+}
+.command-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  background: transparent;
+}
+.command-result-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.command-result-copy strong,
+.command-result-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.command-results .search-completed {
+  display: inline;
+  color: var(--success);
+  font-size: 0.6875rem;
+}
+.toast-viewport {
+  gap: 0.5rem;
+  max-height: min(70vh, 40rem);
+  overflow-y: auto;
+}
+.toast {
+  flex-shrink: 0;
+}
+.toast-error {
+  background: var(--danger-wash);
+  color: var(--ink);
+}
+.toast-error > svg {
+  color: var(--danger);
+}
+.toast-error .toast-copy span {
+  color: var(--danger);
+}
+.toast-error .toast-action,
+.toast-error .toast-close {
+  color: var(--danger);
+}
+.focus-dock {
+  flex-shrink: 0;
+}
+.mobile-settings {
+  display: none;
+}
+.title-bar.platform-unknown {
+  padding-right: 1rem;
+}
+button:active:not(:disabled) {
+  translate: 0 1px;
+}
+.drag-handle:active,
+.task-check:active {
+  translate: none;
+}
+
+@media (max-width: 56rem), (max-width: 64rem) and (orientation: portrait) {
+  .title-bar {
+    display: flex;
+    height: calc(3rem + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 0.65rem 0;
+    gap: 0.65rem;
+  }
+  .title-brand {
+    padding: 0;
+  }
+  .title-subtitle,
+  .title-drag-space,
+  .window-controls {
+    display: none;
+  }
+  .command-trigger {
+    flex: 1;
+    min-width: 0;
+    height: 2rem;
+  }
+  .command-trigger > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.6875rem;
+  }
+  .command-trigger kbd {
+    display: none;
+  }
+  .mobile-settings {
+    display: inline-flex;
+    flex-shrink: 0;
+    width: 2.5rem;
+    height: 2.5rem;
+  }
+  .main-pane {
+    display: flex;
+    height: calc(100dvh - 3rem - env(safe-area-inset-top));
+    padding-bottom: calc(4.65rem + env(safe-area-inset-bottom));
+  }
+  .preview-label {
+    padding: 0.4rem 1rem 0;
+    font-size: 0.625rem;
+  }
+  .main-toolbar {
+    padding-top: 1rem;
+  }
+  .quick-add-options {
+    gap: 0.35rem;
+  }
+  .quick-add-hint {
+    display: none;
+  }
+  .quick-add-options input,
+  .quick-add-options select {
+    height: 2rem;
+  }
+  .quick-add-options .quick-plan-link {
+    margin-left: 0;
+  }
+  .quick-add > .quick-add-action {
+    min-width: 2.5rem;
+  }
+  .task-actions .learning-task-button,
+  .task-actions .focus-task-button {
+    display: none;
+  }
+  .task-actions .task-menu-trigger {
+    min-width: 2.5rem;
+    min-height: 2.75rem;
+  }
+  .task-row {
+    grid-template-columns: 1.4rem 2rem minmax(0, 1fr) 2.5rem;
+    padding-right: 0;
+  }
+  .task-title {
+    font-size: 1rem;
+  }
+  .task-menu button {
+    min-height: 2.5rem;
+  }
+  .focus-dock {
+    margin: 0.25rem 0.75rem 0.45rem;
+  }
+  .focus-dock.is-idle {
+    display: flex;
+    flex-wrap: wrap;
+  }
+  .focus-dock.is-idle .focus-idle-copy {
+    display: none;
+  }
+  .focus-dock.is-idle .focus-dock-actions {
+    display: flex;
+  }
+  .focus-dock.is-idle .focus-dock-actions button {
+    flex: 1;
+    min-height: 2.5rem;
+  }
+  .focus-dock.is-active {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.4rem;
+  }
+  .focus-dock.is-active .focus-active-copy {
+    grid-column: 1;
+  }
+  .focus-dock.is-active .focus-time {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 1.5rem;
+  }
+  .focus-dock.is-active .focus-dock-actions {
+    display: flex;
+    justify-content: flex-end;
+    grid-column: 1 / -1;
+  }
+  .focus-dock.is-active .focus-dock-actions button {
+    min-width: 2.75rem;
+  }
+  .desktop-focus-control {
+    display: none;
+  }
+  .toast-viewport {
+    bottom: calc(5.25rem + env(safe-area-inset-bottom));
+  }
+  .drawer-slot {
+    position: fixed;
+  }
+  .command-footer {
+    gap: 0.65rem;
+    font-size: 0.625rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  button:active:not(:disabled) {
+    translate: none;
+  }
+}

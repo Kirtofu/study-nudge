@@ -300,9 +300,24 @@ export interface BackupResult {
   imported?: number
 }
 
+export type DataDomain =
+  | 'tasks'
+  | 'tags'
+  | 'lists'
+  | 'settings'
+  | 'focus'
+  | 'learning'
+  | 'recommendation'
+  | 'sync'
+export interface DataChangedEvent {
+  domains: DataDomain[]
+  source: 'local' | 'sync' | 'import'
+}
+
 export interface NudgeBridge {
   app: {
     bootstrap: () => Promise<BootstrapSnapshot>
+    onDataChanged: (callback: (event: DataChangedEvent) => void) => () => void
   }
   tasks: {
     list: () => Promise<Task[]>
@@ -326,7 +341,11 @@ export interface NudgeBridge {
     getState: () => Promise<FocusState>
     getStats: () => Promise<FocusStats>
     history: (query: FocusHistoryQuery) => Promise<FocusHistoryPage>
-    start: (input: { mode: 'pomodoro' | 'stopwatch'; taskId?: string | null }) => Promise<FocusState>
+    start: (input: {
+      mode: 'pomodoro' | 'stopwatch'
+      taskId?: string | null
+      replaceActive?: boolean
+    }) => Promise<FocusState>
     pause: () => Promise<FocusState>
     resume: () => Promise<FocusState>
     stop: () => Promise<FocusState>
@@ -348,11 +367,26 @@ export interface NudgeBridge {
     resources: {
       create: (
         taskId: string,
-        input: Pick<LearningResource, 'kind' | 'title' | 'summary' | 'url' | 'platform' | 'language'>
+        input: Pick<
+          LearningResource,
+          'kind' | 'title' | 'summary' | 'url' | 'platform' | 'language'
+        >
       ) => Promise<LearningResource>
       update: (
         id: string,
-        input: Partial<Pick<LearningResource, 'kind' | 'title' | 'summary' | 'url' | 'platform' | 'language' | 'thumbnailUrl' | 'verified'>>
+        input: Partial<
+          Pick<
+            LearningResource,
+            | 'kind'
+            | 'title'
+            | 'summary'
+            | 'url'
+            | 'platform'
+            | 'language'
+            | 'thumbnailUrl'
+            | 'verified'
+          >
+        >
       ) => Promise<LearningResource>
       delete: (id: string) => Promise<void>
       reorder: (packId: string, ids: string[]) => Promise<void>
@@ -374,7 +408,9 @@ export interface NudgeBridge {
   recommendation: {
     getSettings: () => Promise<RecommendationSettings>
     updateSettings: (input: UpdateRecommendationSettingsInput) => Promise<RecommendationSettings>
-    testConnection: (input?: UpdateRecommendationSettingsInput) => Promise<{ ok: boolean; message: string }>
+    testConnection: (
+      input?: UpdateRecommendationSettingsInput
+    ) => Promise<{ ok: boolean; message: string }>
   }
   sync: {
     configure: (input: ConfigureSyncInput) => Promise<SyncSettings>
