@@ -21,6 +21,14 @@ pub struct SecretStore {
 }
 
 impl SecretStore {
+    pub fn isolated() -> Self {
+        Self {
+            available: false,
+            backend: "isolated-test-session".into(),
+            detail: None,
+            session: Mutex::new(HashMap::new()),
+        }
+    }
     pub fn new() -> Self {
         match install_native_store() {
             Ok(()) => Self {
@@ -72,7 +80,7 @@ impl SecretStore {
         if value.is_empty() {
             return self.delete(key);
         }
-        if !persistent {
+        if !persistent || self.backend == "isolated-test-session" {
             self.session
                 .lock()
                 .insert(key.into(), Zeroizing::new(value.into()));

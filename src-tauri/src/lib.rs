@@ -1,8 +1,11 @@
+mod commands;
+mod data_events;
 mod database;
 mod focus;
 mod media_cache;
 mod models;
 mod recommendation;
+mod reminders;
 mod secret_store;
 mod sync;
 mod sync_clock;
@@ -19,6 +22,7 @@ use std::{
 };
 
 use anyhow::Context;
+use data_events::emit_data_changed;
 use database::{Database, LearningGenerationStateUpdate};
 use focus::FocusService;
 use models::*;
@@ -153,6 +157,9 @@ fn apply_desktop_preferences(app: &AppHandle, settings: &AppSettings) -> anyhow:
         })
         .context("注册全局快速添加快捷键")?;
 
+    if std::env::var_os("NUDGE_TEST_DATA_DIR").is_some() {
+        return Ok(());
+    }
     let autostart = app.autolaunch();
     let autostart_enabled = autostart.is_enabled().context("读取开机启动状态")?;
     if settings.auto_start && !autostart_enabled {
@@ -212,841 +219,6 @@ fn setup_tray(app: &AppHandle) -> anyhow::Result<()> {
     }
     tray.build(app)?;
     Ok(())
-}
-
-#[tauri::command]
-fn tasks_list(state: State<'_, AppState>) -> Result<Vec<Task>, String> {
-    command_result(state.database.list_tasks())
-}
-
-#[tauri::command]
-fn tasks_create(
-    state: State<'_, AppState>,
-    input: CreateTaskInput,
-) -> Result<TaskMutationResult, String> {
-    command_result(
-        state
-            .database
-            .create_task(input)
-            .map(|task| task_mutation(Some(task), vec![])),
-    )
-}
-
-#[tauri::command]
-fn tasks_update(
-    state: State<'_, AppState>,
-    id: String,
-    input: UpdateTaskInput,
-) -> Result<TaskMutationResult, String> {
-    command_result(
-        state
-            .database
-            .update_task(&id, input)
-            .map(|task| task_mutation(Some(task), vec![])),
-    )
-}
-
-#[tauri::command]
-fn tasks_complete(
-    state: State<'_, AppState>,
-    id: String,
-    completed: bool,
-) -> Result<TaskMutationResult, String> {
-    command_result(
-        state
-            .database
-            .complete_task(&id, completed)
-            .map(|task| task_mutation(Some(task), vec![])),
-    )
-}
-
-#[tauri::command]
-fn tasks_delete(state: State<'_, AppState>, id: String) -> Result<TaskMutationResult, String> {
-    command_result(
-        state
-            .database
-            .delete_task(&id)
-            .map(|()| task_mutation(None, vec![id])),
-    )
-}
-
-#[tauri::command]
-fn tasks_restore(state: State<'_, AppState>, id: String) -> Result<TaskMutationResult, String> {
-    command_result(
-        state
-            .database
-            .restore_task(&id)
-            .map(|task| task_mutation(Some(task), vec![])),
-    )
-}
-
-#[tauri::command]
-fn tasks_reorder(
-    state: State<'_, AppState>,
-    ids: Vec<String>,
-) -> Result<Vec<TaskOrderPatch>, String> {
-    command_result(state.database.reorder_tasks(&ids).map(|()| {
-        ids.into_iter()
-            .enumerate()
-            .map(|(index, id)| TaskOrderPatch {
-                id,
-                position: ((index + 1) * 1000) as f64,
-            })
-            .collect()
-    }))
-}
-
-#[tauri::command]
-fn lists_list(state: State<'_, AppState>) -> Result<Vec<TaskList>, String> {
-    command_result(state.database.list_lists())
-}
-
-#[tauri::command]
-fn lists_create(state: State<'_, AppState>, name: String) -> Result<TaskList, String> {
-    command_result(state.database.create_list(name))
-}
-
-#[tauri::command]
-fn lists_update(
-    state: State<'_, AppState>,
-    id: String,
-    name: Option<String>,
-    color: Option<String>,
-) -> Result<TaskList, String> {
-    command_result(state.database.update_list(&id, name, color))
-}
-
-#[tauri::command]
-fn lists_delete(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    command_result(state.database.delete_list(&id))
-}
-
-#[tauri::command]
-fn tags_list(state: State<'_, AppState>) -> Result<Vec<Tag>, String> {
-    command_result(state.database.list_tags())
-}
-
-#[tauri::command]
-fn focus_get_state(state: State<'_, AppState>) -> FocusState {
-    state.focus.get_state()
-}
-
-#[tauri::command]
-fn focus_get_stats(state: State<'_, AppState>) -> Result<FocusStats, String> {
-    command_result(state.database.get_focus_stats())
-}
-
-#[tauri::command]
-fn focus_history(
-    state: State<'_, AppState>,
-    query: FocusHistoryQuery,
-) -> Result<FocusHistoryPage, String> {
-    command_result(state.database.get_focus_history(query))
-}
-
-#[tauri::command]
-fn focus_start(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    mode: String,
-    task_id: Option<String>,
-) -> Result<FocusState, String> {
-    let next = command_result(state.focus.start(&mode, task_id))?;
-    let _ = app.emit("focus-changed", &next);
-    Ok(next)
-}
-
-#[tauri::command]
-fn focus_pause(app: AppHandle, state: State<'_, AppState>) -> Result<FocusState, String> {
-    let next = command_result(state.focus.pause())?;
-    let _ = app.emit("focus-changed", &next);
-    Ok(next)
-}
-
-#[tauri::command]
-fn focus_resume(app: AppHandle, state: State<'_, AppState>) -> Result<FocusState, String> {
-    let next = command_result(state.focus.resume())?;
-    let _ = app.emit("focus-changed", &next);
-    Ok(next)
-}
-
-#[tauri::command]
-fn focus_stop(app: AppHandle, state: State<'_, AppState>) -> Result<FocusState, String> {
-    let next = command_result(state.focus.stop())?;
-    let _ = app.emit("focus-changed", &next);
-    Ok(next)
-}
-
-#[tauri::command]
-fn focus_skip(app: AppHandle, state: State<'_, AppState>) -> Result<FocusState, String> {
-    let next = command_result(state.focus.skip())?;
-    let _ = app.emit("focus-changed", &next);
-    Ok(next)
-}
-
-#[tauri::command]
-fn settings_get(state: State<'_, AppState>) -> Result<AppSettings, String> {
-    command_result(state.database.get_settings())
-}
-
-#[tauri::command]
-fn settings_update(
-    _app: AppHandle,
-    state: State<'_, AppState>,
-    input: UpdateAppSettingsInput,
-) -> Result<AppSettings, String> {
-    command_result((|| {
-        #[cfg(desktop)]
-        let previous = state.database.get_settings()?;
-        let next = state.database.update_settings(input)?;
-        #[cfg(desktop)]
-        if let Err(error) = apply_desktop_preferences(&_app, &next) {
-            let _ = state
-                .database
-                .update_settings(settings_as_update(&previous));
-            let _ = apply_desktop_preferences(&_app, &previous);
-            return Err(error);
-        }
-        Ok(next)
-    })())
-}
-
-#[tauri::command]
-fn backup_export(state: State<'_, AppState>, path: String) -> Result<BackupResult, String> {
-    command_result((|| {
-        let payload = state.database.export_json()?;
-        fs::write(&path, serde_json::to_vec_pretty(&payload)?)?;
-        Ok(BackupResult {
-            canceled: false,
-            path: Some(path),
-            imported: None,
-        })
-    })())
-}
-
-#[tauri::command]
-fn backup_import(
-    state: State<'_, AppState>,
-    path: String,
-    mode: String,
-) -> Result<BackupResult, String> {
-    command_result((|| {
-        let metadata = fs::metadata(&path)?;
-        if metadata.len() > 100 * 1024 * 1024 {
-            anyhow::bail!("备份文件过大");
-        }
-        let payload: Value = serde_json::from_slice(&fs::read(&path)?)?;
-        let imported = state.database.import_json(payload, &mode)?;
-        Ok(BackupResult {
-            canceled: false,
-            path: Some(path),
-            imported: Some(imported),
-        })
-    })())
-}
-
-#[tauri::command]
-fn learning_get(
-    state: State<'_, AppState>,
-    task_id: String,
-) -> Result<Option<LearningPack>, String> {
-    command_result(state.database.get_learning_pack(&task_id))
-}
-
-#[tauri::command]
-fn learning_ensure(state: State<'_, AppState>, task_id: String) -> Result<LearningPack, String> {
-    command_result(state.database.ensure_learning_pack(&task_id))
-}
-
-#[tauri::command]
-async fn learning_generate(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    task_id: String,
-    sections: Option<Vec<String>>,
-    include_notes: Option<bool>,
-) -> Result<LearningPack, String> {
-    let database = state.database.clone();
-    let task = command_result(database.get_task(&task_id))?;
-    let mut settings: RecommendationSettings = command_result(
-        database.setting("recommendationSettings", RecommendationSettings::default()),
-    )?;
-    let api_key = command_result(state.secrets.get(API_KEY))?;
-    settings.has_api_key = api_key.is_some();
-    let pack = command_result(database.ensure_learning_pack(&task_id))?;
-    if settings.provider == "offline" {
-        return Ok(pack);
-    }
-    let generation_id = Uuid::new_v4().to_string();
-    let cancellation = Arc::new(AtomicBool::new(false));
-    if let Some(previous) = state
-        .canceled_learning
-        .lock()
-        .insert(task_id.clone(), cancellation.clone())
-    {
-        previous.store(true, Ordering::Relaxed);
-    }
-    let requested =
-        sections.unwrap_or_else(|| vec!["resources".into(), "videos".into(), "roadmap".into()]);
-    let requested = requested
-        .into_iter()
-        .filter(|section| matches!(section.as_str(), "resources" | "videos" | "roadmap"))
-        .collect::<Vec<_>>();
-    let mut completed = vec![];
-    let mut failed = vec![];
-    let mut canceled_count = 0_usize;
-    command_result(database.set_learning_generation_state(
-        &task_id,
-        LearningGenerationStateUpdate {
-            status: "generating",
-            provider: &settings.provider,
-            model: Some(&settings.model),
-            generation_id: Some(&generation_id),
-            completed_sections: &completed,
-            failed_sections: &failed,
-        },
-    ))?;
-
-    let mut jobs = tokio::task::JoinSet::new();
-    for section in requested {
-        let _ = app.emit(
-            "learning-progress",
-            LearningProgressEvent {
-                task_id: task_id.clone(),
-                pack_id: pack.id.clone(),
-                generation_id: generation_id.clone(),
-                section: section.clone(),
-                state: "generating".into(),
-                message: match section.as_str() {
-                    "resources" => "正在整理资料与工具",
-                    "videos" => "正在筛选学习视频",
-                    _ => "正在规划学习路线",
-                }
-                .into(),
-            },
-        );
-        let task = task.clone();
-        let settings = settings.clone();
-        let api_key = api_key.as_ref().map(|value| value.to_string());
-        let cancellation = cancellation.clone();
-        let include_notes = include_notes.unwrap_or(false);
-        jobs.spawn(async move {
-            let requested_section = section.clone();
-            let generation = recommendation::generate_section(
-                &task,
-                &requested_section,
-                &settings,
-                api_key.as_deref(),
-                include_notes,
-            );
-            tokio::pin!(generation);
-            loop {
-                tokio::select! {
-                    result = &mut generation => break (section, Some(result)),
-                    _ = tokio::time::sleep(Duration::from_millis(100)) => {
-                        if cancellation.load(Ordering::Relaxed) {
-                            break (section, None);
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    while let Some(joined) = jobs.join_next().await {
-        let (section, result) = match joined {
-            Ok(value) => value,
-            Err(error) => {
-                failed.push("unknown".into());
-                let _ = app.emit(
-                    "learning-progress",
-                    LearningProgressEvent {
-                        task_id: task_id.clone(),
-                        pack_id: pack.id.clone(),
-                        generation_id: generation_id.clone(),
-                        section: "roadmap".into(),
-                        state: "error".into(),
-                        message: format!("生成任务意外停止：{error}"),
-                    },
-                );
-                continue;
-            }
-        };
-        let Some(result) = result else {
-            canceled_count += 1;
-            failed.push(section.clone());
-            let _ = app.emit(
-                "learning-progress",
-                LearningProgressEvent {
-                    task_id: task_id.clone(),
-                    pack_id: pack.id.clone(),
-                    generation_id: generation_id.clone(),
-                    section,
-                    state: "canceled".into(),
-                    message: "已取消这一栏的生成".into(),
-                },
-            );
-            continue;
-        };
-        match result {
-            Ok(GeneratedSection::Resources(resources)) => {
-                command_result(database.replace_generated_section(
-                    &task_id,
-                    "resources",
-                    &resources,
-                    &[],
-                ))?;
-                completed.push(section.clone());
-                let _ = app.emit(
-                    "learning-progress",
-                    LearningProgressEvent {
-                        task_id: task_id.clone(),
-                        pack_id: pack.id.clone(),
-                        generation_id: generation_id.clone(),
-                        section,
-                        state: "success".into(),
-                        message: "资料与工具已经更新".into(),
-                    },
-                );
-            }
-            Ok(GeneratedSection::Videos(resources)) => {
-                command_result(database.replace_generated_section(
-                    &task_id,
-                    "videos",
-                    &resources,
-                    &[],
-                ))?;
-                completed.push(section.clone());
-                let _ = app.emit(
-                    "learning-progress",
-                    LearningProgressEvent {
-                        task_id: task_id.clone(),
-                        pack_id: pack.id.clone(),
-                        generation_id: generation_id.clone(),
-                        section,
-                        state: "success".into(),
-                        message: "视频推荐已经更新".into(),
-                    },
-                );
-            }
-            Ok(GeneratedSection::Roadmap(nodes)) => {
-                command_result(database.replace_generated_section(
-                    &task_id,
-                    "roadmap",
-                    &[],
-                    &nodes,
-                ))?;
-                completed.push(section.clone());
-                let _ = app.emit(
-                    "learning-progress",
-                    LearningProgressEvent {
-                        task_id: task_id.clone(),
-                        pack_id: pack.id.clone(),
-                        generation_id: generation_id.clone(),
-                        section,
-                        state: "success".into(),
-                        message: "学习路线已经更新".into(),
-                    },
-                );
-            }
-            Err(error) => {
-                failed.push(section.clone());
-                let _ = app.emit(
-                    "learning-progress",
-                    LearningProgressEvent {
-                        task_id: task_id.clone(),
-                        pack_id: pack.id.clone(),
-                        generation_id: generation_id.clone(),
-                        section,
-                        state: "error".into(),
-                        message: error.to_string(),
-                    },
-                );
-            }
-        }
-    }
-
-    let status = if failed.is_empty() {
-        "ready"
-    } else if completed.is_empty() && canceled_count == 0 {
-        "error"
-    } else {
-        "partial"
-    };
-    let mut cancellations = state.canceled_learning.lock();
-    if cancellations
-        .get(&task_id)
-        .is_some_and(|current| Arc::ptr_eq(current, &cancellation))
-    {
-        cancellations.remove(&task_id);
-    }
-    drop(cancellations);
-    command_result(database.set_learning_generation_state(
-        &task_id,
-        LearningGenerationStateUpdate {
-            status,
-            provider: &settings.provider,
-            model: Some(&settings.model),
-            generation_id: Some(&generation_id),
-            completed_sections: &completed,
-            failed_sections: &failed,
-        },
-    ))
-}
-
-#[tauri::command]
-fn learning_cancel(state: State<'_, AppState>, task_id: String) {
-    if let Some(cancellation) = state.canceled_learning.lock().get(&task_id) {
-        cancellation.store(true, Ordering::Relaxed);
-    }
-}
-
-#[tauri::command]
-fn learning_resource_create(
-    state: State<'_, AppState>,
-    task_id: String,
-    input: CreateLearningResourceInput,
-) -> Result<LearningResource, String> {
-    command_result(state.database.create_learning_resource(&task_id, input))
-}
-
-#[tauri::command]
-fn learning_resource_update(
-    state: State<'_, AppState>,
-    id: String,
-    input: UpdateLearningResourceInput,
-) -> Result<LearningResource, String> {
-    command_result(state.database.update_learning_resource(&id, input))
-}
-
-#[tauri::command]
-fn learning_resource_delete(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    command_result(state.database.delete_learning_resource(&id))
-}
-
-#[tauri::command]
-fn learning_resource_reorder(
-    state: State<'_, AppState>,
-    pack_id: String,
-    ids: Vec<String>,
-) -> Result<(), String> {
-    command_result(state.database.reorder_learning_resources(&pack_id, &ids))
-}
-
-#[tauri::command]
-fn learning_resource_pin(
-    state: State<'_, AppState>,
-    id: String,
-    pinned: bool,
-) -> Result<LearningResource, String> {
-    command_result(state.database.pin_learning_resource(&id, pinned))
-}
-
-#[tauri::command]
-fn learning_node_upsert(
-    state: State<'_, AppState>,
-    task_id: String,
-    input: UpsertLearningNodeInput,
-) -> Result<LearningNode, String> {
-    command_result(state.database.upsert_learning_node(&task_id, input))
-}
-
-#[tauri::command]
-fn learning_node_delete(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    command_result(state.database.delete_learning_node(&id))
-}
-
-#[tauri::command]
-fn learning_edge_connect(
-    state: State<'_, AppState>,
-    pack_id: String,
-    source_node_id: String,
-    target_node_id: String,
-) -> Result<LearningEdge, String> {
-    command_result(state.database.connect_learning_nodes(
-        &pack_id,
-        &source_node_id,
-        &target_node_id,
-    ))
-}
-
-#[tauri::command]
-fn learning_edge_disconnect(state: State<'_, AppState>, id: String) -> Result<(), String> {
-    command_result(state.database.disconnect_learning_edge(&id))
-}
-
-#[tauri::command]
-fn learning_auto_layout(
-    state: State<'_, AppState>,
-    task_id: String,
-) -> Result<LearningPack, String> {
-    command_result(state.database.auto_layout_learning(&task_id))
-}
-
-#[tauri::command]
-fn learning_node_set_status(
-    state: State<'_, AppState>,
-    id: String,
-    status: String,
-) -> Result<LearningNode, String> {
-    command_result(state.database.set_learning_node_status(&id, &status))
-}
-
-#[tauri::command]
-fn recommendation_get_settings(
-    state: State<'_, AppState>,
-) -> Result<RecommendationSettings, String> {
-    command_result((|| {
-        let mut settings: RecommendationSettings = state
-            .database
-            .setting("recommendationSettings", RecommendationSettings::default())?;
-        settings.has_api_key = state.secrets.has(API_KEY);
-        Ok(settings)
-    })())
-}
-
-#[tauri::command]
-fn recommendation_update_settings(
-    state: State<'_, AppState>,
-    mut input: UpdateRecommendationSettingsInput,
-) -> Result<RecommendationSettings, String> {
-    command_result((|| {
-        if input.clear_api_key.unwrap_or(false) {
-            state.secrets.delete(API_KEY)?;
-        }
-        if let Some(api_key) = input.api_key.take() {
-            let api_key = api_key.trim();
-            if !api_key.is_empty() {
-                state.secrets.set(API_KEY, api_key, true)?;
-            }
-        }
-        input.clear_api_key = None;
-        let has_api_key = state.secrets.has(API_KEY);
-        let current: RecommendationSettings = state
-            .database
-            .setting("recommendationSettings", RecommendationSettings::default())?;
-        let mut next = recommendation::merge_settings(current, &input, has_api_key)?;
-        next.has_api_key = false;
-        state
-            .database
-            .set_setting("recommendationSettings", &next)?;
-        next.has_api_key = has_api_key;
-        Ok(next)
-    })())
-}
-
-#[tauri::command]
-async fn recommendation_test_connection(
-    state: State<'_, AppState>,
-    mut input: Option<UpdateRecommendationSettingsInput>,
-) -> Result<OperationResult, String> {
-    let supplied_key = input
-        .as_mut()
-        .and_then(|value| value.api_key.take())
-        .filter(|value| !value.trim().is_empty())
-        .map(Zeroizing::new);
-    let stored_key = command_result(state.secrets.get(API_KEY))?;
-    let api_key = supplied_key.as_ref().or(stored_key.as_ref());
-    let current: RecommendationSettings = command_result(
-        state
-            .database
-            .setting("recommendationSettings", RecommendationSettings::default()),
-    )?;
-    let settings = if let Some(input) = input.as_ref() {
-        command_result(recommendation::merge_settings(
-            current,
-            input,
-            api_key.is_some(),
-        ))?
-    } else {
-        current
-    };
-    command_result(
-        recommendation::test_connection(&settings, api_key.map(|value| value.as_str())).await,
-    )
-}
-
-#[tauri::command]
-fn sync_configure(
-    state: State<'_, AppState>,
-    input: ConfigureSyncInput,
-) -> Result<SyncSettings, String> {
-    command_result((|| {
-        sync::validate_configuration(&input)?;
-        state.secrets.set(WEBDAV_PASSWORD, &input.password, true)?;
-        state.secrets.set(
-            SYNC_PASSPHRASE,
-            &input.passphrase,
-            input.remember_passphrase,
-        )?;
-        let current = state.database.get_sync_settings()?;
-        let settings = sync::to_settings(&input, current.device_id);
-        state.database.set_sync_settings(&settings)?;
-        let mut sync_state = state.database.get_sync_state()?;
-        sync_state.status = "idle".into();
-        sync_state.last_error = None;
-        state.database.set_sync_state(&sync_state)?;
-        Ok(settings)
-    })())
-}
-
-#[tauri::command]
-async fn sync_test(
-    state: State<'_, AppState>,
-    input: Option<ConfigureSyncInput>,
-) -> Result<OperationResult, String> {
-    if let Some(input) = input {
-        return command_result(sync::test_webdav(&input).await);
-    }
-    let settings = command_result(state.database.get_sync_settings())?;
-    let password = command_result(state.secrets.get(WEBDAV_PASSWORD))?
-        .ok_or_else(|| "WebDAV 密码未保存，请重新配置同步".to_string())?;
-    let passphrase = command_result(state.secrets.get(SYNC_PASSPHRASE))?
-        .ok_or_else(|| "请输入同步口令后再测试".to_string())?;
-    let input = ConfigureSyncInput {
-        server_url: settings.server_url,
-        username: settings.username,
-        password: password.to_string(),
-        passphrase: passphrase.to_string(),
-        remote_path: settings.remote_path,
-        remember_passphrase: settings.remember_passphrase,
-        device_name: settings.device_name,
-    };
-    command_result(sync::test_webdav(&input).await)
-}
-
-#[tauri::command]
-async fn sync_run(app: AppHandle, state: State<'_, AppState>) -> Result<SyncState, String> {
-    let password = command_result(state.secrets.get(WEBDAV_PASSWORD))?
-        .ok_or_else(|| "WebDAV 密码未保存，请重新配置同步".to_string())?;
-    let passphrase = command_result(state.secrets.get(SYNC_PASSPHRASE))?
-        .ok_or_else(|| "请输入同步口令后再同步".to_string())?;
-    let settings = command_result(state.database.get_sync_settings())?;
-    let database = state.database.clone();
-    let running = command_result(database.get_sync_state())?;
-    let _ = app.emit(
-        "sync-state-changed",
-        SyncState {
-            status: "syncing".into(),
-            ..running
-        },
-    );
-    match sync::run_sync(database.clone(), &settings, &password, &passphrase).await {
-        Ok(next) => {
-            let _ = app.emit("sync-state-changed", &next);
-            Ok(next)
-        }
-        Err(error) => {
-            let mut next = database.get_sync_state().unwrap_or_default();
-            if next.status == "syncing" {
-                next.status = "error".into();
-                next.last_error = Some(error.to_string());
-                let _ = database.set_sync_state(&next);
-            }
-            let _ = app.emit("sync-state-changed", &next);
-            Err(error.to_string())
-        }
-    }
-}
-
-#[tauri::command]
-fn sync_disconnect(state: State<'_, AppState>) -> Result<(), String> {
-    command_result((|| {
-        state.secrets.delete(WEBDAV_PASSWORD)?;
-        state.secrets.delete(SYNC_PASSPHRASE)?;
-        let current = state.database.get_sync_settings()?;
-        state.database.set_sync_settings(&SyncSettings {
-            enabled: false,
-            server_url: String::new(),
-            username: String::new(),
-            remote_path: "Nudge/nudge-v2.enc".into(),
-            remember_passphrase: false,
-            sync_v3_confirmed: false,
-            has_credentials: false,
-            device_id: current.device_id,
-            device_name: current.device_name,
-        })?;
-        state.database.set_sync_state(&SyncState::default())?;
-        Ok(())
-    })())
-}
-
-#[tauri::command]
-fn sync_get_settings(state: State<'_, AppState>) -> Result<SyncSettings, String> {
-    command_result((|| {
-        let mut settings = state.database.get_sync_settings()?;
-        settings.has_credentials = state.secrets.has(WEBDAV_PASSWORD);
-        Ok(settings)
-    })())
-}
-
-#[tauri::command]
-fn sync_confirm_upgrade(state: State<'_, AppState>) -> Result<SyncSettings, String> {
-    command_result((|| {
-        let mut settings = state.database.get_sync_settings()?;
-        settings.sync_v3_confirmed = true;
-        state.database.set_sync_settings(&settings)?;
-        Ok(settings)
-    })())
-}
-
-#[tauri::command]
-fn secrets_status(state: State<'_, AppState>) -> Result<SecretStoreStatus, String> {
-    let migration = state
-        .database
-        .setting("secretMigration", "not-needed".to_string())
-        .unwrap_or_else(|_| "unknown".into());
-    Ok(state.secrets.status(&migration))
-}
-
-#[tauri::command]
-fn secrets_import_legacy(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    input: LegacySecretsInput,
-) -> Result<SecretStoreStatus, String> {
-    command_result((|| {
-        if let Some(value) = input
-            .recommendation_api_key
-            .filter(|value| !value.is_empty())
-        {
-            state.secrets.set(API_KEY, &value, true)?;
-        }
-        if let Some(value) = input.webdav_password.filter(|value| !value.is_empty()) {
-            state.secrets.set(WEBDAV_PASSWORD, &value, true)?;
-        }
-        if let Some(value) = input.sync_passphrase.filter(|value| !value.is_empty()) {
-            let remember = state.database.get_sync_settings()?.remember_passphrase;
-            state.secrets.set(SYNC_PASSPHRASE, &value, remember)?;
-        }
-        let vault = app.path().app_data_dir()?.join("nudge-vault.hold");
-        if vault.exists() {
-            fs::remove_file(&vault).context("新密钥验证成功，但旧密钥库未能删除")?;
-        }
-        state
-            .database
-            .set_setting("secretMigration", &"completed")?;
-        Ok(state.secrets.status("completed"))
-    })())
-}
-
-#[tauri::command]
-fn sync_get_state(state: State<'_, AppState>) -> Result<SyncState, String> {
-    command_result(state.database.get_sync_state())
-}
-
-#[tauri::command]
-fn sync_list_conflicts(state: State<'_, AppState>) -> Result<Vec<SyncConflict>, String> {
-    command_result(state.database.list_conflicts())
-}
-
-#[tauri::command]
-fn sync_resolve_conflict(
-    state: State<'_, AppState>,
-    id: String,
-    choice: String,
-) -> Result<(), String> {
-    command_result(state.database.resolve_conflict(&id, &choice))
 }
 
 #[tauri::command]
@@ -1185,10 +357,22 @@ fn notifications_prepare(app: AppHandle) -> Result<bool, String> {
         .map_err(|error| error.to_string())
 }
 
+fn data_directory(app: &AppHandle) -> anyhow::Result<PathBuf> {
+    if let Some(path) = std::env::var_os("NUDGE_TEST_DATA_DIR") {
+        let path = PathBuf::from(path);
+        anyhow::ensure!(path.is_absolute(), "NUDGE_TEST_DATA_DIR 必须是绝对路径");
+        return Ok(path);
+    }
+    Ok(app.path().app_data_dir()?)
+}
+
 fn app_paths(app: &AppHandle) -> anyhow::Result<(PathBuf, Option<PathBuf>, Vec<PathBuf>)> {
-    let app_data = app.path().app_data_dir()?;
+    let app_data = data_directory(app)?;
     fs::create_dir_all(&app_data)?;
     let database_path = app_data.join("nudge.db");
+    if std::env::var_os("NUDGE_TEST_DATA_DIR").is_some() {
+        return Ok((database_path, None, vec![]));
+    }
     #[cfg(target_os = "windows")]
     let legacy_database = std::env::var_os("APPDATA")
         .map(PathBuf::from)
@@ -1217,6 +401,7 @@ fn setup_background_services(app: &AppHandle, focus: Arc<FocusService>, database
             interval.tick().await;
             if let Ok(Some((next, title, body))) = focus.tick() {
                 let _ = app_handle.emit("focus-changed", &next);
+                emit_data_changed(&app_handle, &["focus"], "local");
                 let _ = app_handle
                     .notification()
                     .builder()
@@ -1232,21 +417,15 @@ fn setup_background_services(app: &AppHandle, focus: Arc<FocusService>, database
         let mut interval = tokio::time::interval(Duration::from_secs(30));
         loop {
             interval.tick().await;
-            if let Ok(reminders) = database.due_reminders() {
-                for (id, title, notes) in reminders {
-                    let _ = app_handle
-                        .notification()
-                        .builder()
-                        .title(&title)
-                        .body(if notes.is_empty() {
-                            "这是你之前设置的任务提醒。"
-                        } else {
-                            &notes
-                        })
-                        .show();
-                    let _ = database.mark_reminder_notified(&id);
-                }
-            }
+            let _ = reminders::deliver_pending(&database, |title, body| {
+                app_handle
+                    .notification()
+                    .builder()
+                    .title(title)
+                    .body(body)
+                    .show()
+                    .is_ok()
+            });
         }
     });
 }
@@ -1291,9 +470,18 @@ pub fn run() {
                 Database::open(database_path, legacy_database, legacy_json)
                     .context("打开并迁移数据库")?,
             );
-            let secrets = Arc::new(SecretStore::new());
-            let thumbnail_cache = app.path().app_cache_dir()?.join("thumbnails");
-            let legacy_vault = app.path().app_data_dir()?.join("nudge-vault.hold");
+            let isolated = std::env::var_os("NUDGE_TEST_DATA_DIR").is_some();
+            let secrets = Arc::new(if isolated {
+                SecretStore::isolated()
+            } else {
+                SecretStore::new()
+            });
+            let thumbnail_cache = if isolated {
+                data_directory(app.handle())?.join("thumbnails")
+            } else {
+                app.path().app_cache_dir()?.join("thumbnails")
+            };
+            let legacy_vault = data_directory(app.handle())?.join("nudge-vault.hold");
             let previous_migration: String = database.setting("secretMigration", String::new())?;
             if previous_migration != "completed" {
                 database.set_setting(
@@ -1359,59 +547,59 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_bootstrap,
-            tasks_list,
-            tasks_create,
-            tasks_update,
-            tasks_complete,
-            tasks_delete,
-            tasks_restore,
-            tasks_reorder,
-            lists_list,
-            lists_create,
-            lists_update,
-            lists_delete,
-            tags_list,
-            focus_get_state,
-            focus_get_stats,
-            focus_history,
-            focus_start,
-            focus_pause,
-            focus_resume,
-            focus_stop,
-            focus_skip,
-            settings_get,
-            settings_update,
-            backup_export,
-            backup_import,
-            learning_get,
-            learning_ensure,
-            learning_generate,
-            learning_cancel,
-            learning_resource_create,
-            learning_resource_update,
-            learning_resource_delete,
-            learning_resource_reorder,
-            learning_resource_pin,
-            learning_node_upsert,
-            learning_node_delete,
-            learning_edge_connect,
-            learning_edge_disconnect,
-            learning_auto_layout,
-            learning_node_set_status,
-            recommendation_get_settings,
-            recommendation_update_settings,
-            recommendation_test_connection,
-            secrets_status,
-            secrets_import_legacy,
-            sync_configure,
-            sync_test,
-            sync_run,
-            sync_disconnect,
-            sync_get_settings,
-            sync_confirm_upgrade,
-            sync_get_state,
-            sync_list_conflicts,
-            sync_resolve_conflict,
+            commands::tasks::tasks_list,
+            commands::tasks::tasks_create,
+            commands::tasks::tasks_update,
+            commands::tasks::tasks_complete,
+            commands::tasks::tasks_delete,
+            commands::tasks::tasks_restore,
+            commands::tasks::tasks_reorder,
+            commands::tasks::lists_list,
+            commands::tasks::lists_create,
+            commands::tasks::lists_update,
+            commands::tasks::lists_delete,
+            commands::tasks::tags_list,
+            commands::focus::focus_get_state,
+            commands::focus::focus_get_stats,
+            commands::focus::focus_history,
+            commands::focus::focus_start,
+            commands::focus::focus_pause,
+            commands::focus::focus_resume,
+            commands::focus::focus_stop,
+            commands::focus::focus_skip,
+            commands::settings::settings_get,
+            commands::settings::settings_update,
+            commands::settings::backup_export,
+            commands::settings::backup_import,
+            commands::learning::learning_get,
+            commands::learning::learning_ensure,
+            commands::learning::learning_generate,
+            commands::learning::learning_cancel,
+            commands::learning::learning_resource_create,
+            commands::learning::learning_resource_update,
+            commands::learning::learning_resource_delete,
+            commands::learning::learning_resource_reorder,
+            commands::learning::learning_resource_pin,
+            commands::learning::learning_node_upsert,
+            commands::learning::learning_node_delete,
+            commands::learning::learning_edge_connect,
+            commands::learning::learning_edge_disconnect,
+            commands::learning::learning_auto_layout,
+            commands::learning::learning_node_set_status,
+            commands::learning::recommendation_get_settings,
+            commands::learning::recommendation_update_settings,
+            commands::learning::recommendation_test_connection,
+            commands::sync::secrets_status,
+            commands::sync::secrets_import_legacy,
+            commands::sync::sync_configure,
+            commands::sync::sync_test,
+            commands::sync::sync_run,
+            commands::sync::sync_disconnect,
+            commands::sync::sync_get_settings,
+            commands::sync::sync_confirm_upgrade,
+            commands::sync::sync_get_state,
+            commands::sync::sync_list_conflicts,
+            commands::sync::sync_resolve_conflict,
             desktop_toggle_mini_window,
             desktop_show_main,
             desktop_open_external,
