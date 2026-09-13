@@ -41,4 +41,4 @@ Windows 发布物：
 
 桌面安装包尚未接入平台代码签名。Android 仍为测试包，iOS 仍为模拟器包。浏览器演示在当前标签页保存数据；真实备份、联网 AI 和同步使用原生应用。
 
-详细检查范围见 [v2.2.0 验证记录](./validation-v2.2.0.md)。
+详细检查范围见 [v2.2.0 验证记录](https://github.com/Kirtofu/study-nudge/blob/v2.2.0/docs/validation-v2.2.0.md)。

@@ -27,4 +27,6 @@
 
 GitHub Quality 验证类型、前端/浏览器测试、生产构建、体积预算、Rust 格式/静态检查/测试和依赖审计。跨平台 Release 工作流在版本 tag 上构建所有发布物，汇总 SHA-256 后发布；不将二进制写入源码仓库。
 
+重构代码已通过 [GitHub Quality 验证](https://github.com/Kirtofu/study-nudge/actions/runs/34747276517)，包括 Linux 上的 Rust 回归与依赖审计。正式版本的构建记录可从 [Release 工作流](https://github.com/Kirtofu/study-nudge/actions/workflows/release.yml) 查看。
+
 libsodium 的官方 MSVC 包可能产生缺少 PDB 的链接警告；签名验证、Rust 检查和安装包构建仍正常执行，未关闭签名验证或放宽检查参数。
